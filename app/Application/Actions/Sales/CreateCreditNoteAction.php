@@ -83,6 +83,7 @@ final readonly class CreateCreditNoteAction
                         $line->costPrice,
                         $line->taxRate,
                         $line->gross->toDecimal(),
+                        $line->cost->toDecimal(),
                     ),
                     $totals->lines,
                 ),
@@ -225,6 +226,9 @@ final readonly class CreateCreditNoteAction
                 throw new CreditQuantityExceededException('Returned quantity cannot exceed the quantity sold.');
             }
 
+            $soldQuantity = Quantity::from(DecimalSnapshot::from($sold, 'quantity'));
+            $exactCostTotal = $sold->getAttribute('cost_total_at_sale');
+
             $items[] = new PricedInvoiceItem(
                 $item->variantId,
                 $requested->toDecimal(),
@@ -233,6 +237,7 @@ final readonly class CreateCreditNoteAction
                 $sold->tax_id,
                 $sold->tax_id === null ? null : DecimalSnapshot::from($sold, 'tax_rate_at_sale'),
                 $sold->tax?->coa_id,
+                $requested->equals($soldQuantity) && is_string($exactCostTotal) ? $exactCostTotal : null,
             );
         }
 

@@ -8,7 +8,9 @@ use App\Domain\Events\StockAdjusted;
 use App\Domain\Exceptions\IdempotencyConflictException;
 use App\Domain\Services\StockMovementService;
 use App\Infrastructure\Models\AuditLog;
+use App\Infrastructure\Models\ProductVariant;
 use App\Infrastructure\Models\StockAdjustment;
+use DateTimeImmutable;
 use Illuminate\Support\Facades\DB;
 
 final readonly class AdjustStockAction
@@ -41,7 +43,8 @@ final readonly class AdjustStockAction
             $quantity = Quantity::from($data->quantityDelta);
 
             if ($quantity->isPositive()) {
-                $this->stock->add($data->variantId, $data->branchId, $quantity->toDecimal(), null, $data->type, 'adjustment', $adjustment->getKey());
+                $unitCost = ProductVariant::query()->whereKey($data->variantId)->valueOrFail('cost_price');
+                $this->stock->add($data->variantId, $data->branchId, $quantity->toDecimal(), $unitCost, $data->type, 'adjustment', $adjustment->getKey(), new DateTimeImmutable);
             } else {
                 $this->stock->deduct($data->variantId, $data->branchId, $quantity->abs()->toDecimal(), null, $data->type, 'adjustment', $adjustment->getKey());
             }

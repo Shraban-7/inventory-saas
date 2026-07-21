@@ -52,6 +52,7 @@ final readonly class VoidInvoiceAction
                     $item->tax_id,
                     $item->tax_id === null ? null : DecimalSnapshot::from($item, 'tax_rate_at_sale'),
                     $item->tax?->coa_id,
+                    is_string($item->getAttribute('cost_total_at_sale')) ? DecimalSnapshot::from($item, 'cost_total_at_sale') : null,
                 ),
             )->all());
             $totals = $this->domain->calculate($pricedItems);
@@ -65,6 +66,7 @@ final readonly class VoidInvoiceAction
                     StockMovementType::SalesReturn,
                     'invoice',
                     $invoice->getKey(),
+                    new DateTimeImmutable,
                 ),
             )->all()));
 

@@ -49,6 +49,7 @@ final readonly class ApproveCreditNoteAction
                     $item->tax_id,
                     $item->tax_id === null ? null : DecimalSnapshot::from($item, 'tax_rate_at_return'),
                     $item->tax?->coa_id,
+                    is_string($item->getAttribute('cost_total_at_return')) ? DecimalSnapshot::from($item, 'cost_total_at_return') : null,
                 ),
             )->all()));
 
@@ -61,6 +62,7 @@ final readonly class ApproveCreditNoteAction
                     StockMovementType::SalesReturn,
                     'credit_note',
                     $creditNote->getKey(),
+                    new DateTimeImmutable,
                 ),
             )->all()));
 

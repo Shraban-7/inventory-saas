@@ -13,9 +13,12 @@ class SeedDefaultChartOfAccounts
         ['code' => '1100', 'name' => 'Cash/Bank', 'type' => ChartOfAccountType::Asset],
         ['code' => '1200', 'name' => 'Accounts Receivable', 'type' => ChartOfAccountType::Asset],
         ['code' => '1300', 'name' => 'Inventory Asset', 'type' => ChartOfAccountType::Asset],
+        ['code' => '2000', 'name' => 'Accounts Payable', 'type' => ChartOfAccountType::Liability],
+        ['code' => '2050', 'name' => 'Goods Received Not Invoiced', 'type' => ChartOfAccountType::Liability],
         ['code' => '2100', 'name' => 'Tax Payable', 'type' => ChartOfAccountType::Liability],
         ['code' => '4000', 'name' => 'Sales Revenue', 'type' => ChartOfAccountType::Revenue],
         ['code' => '5000', 'name' => 'Cost of Goods Sold', 'type' => ChartOfAccountType::CostOfGoodsSold],
+        ['code' => '6000', 'name' => 'Purchase Expense', 'type' => ChartOfAccountType::Expense],
     ];
 
     public function handle(Tenant $tenant): void

@@ -103,7 +103,7 @@ final readonly class CreateInvoiceAction
                 throw new InvalidSalesDataException('Invoice gross total must be positive.');
             }
 
-            $invoiceId = $this->sales->createInvoice(
+            $invoiceId = $this->sales->createInvoiceHeader(
                 new InvoiceRecord(
                     $data->branchId,
                     $data->customerId,
@@ -115,21 +115,9 @@ final readonly class CreateInvoiceAction
                     $totals->total->toDecimal(),
                     $data->notes,
                 ),
-                array_map(
-                    static fn ($line): InvoiceItemRecord => new InvoiceItemRecord(
-                        $line->variantId,
-                        $line->taxId,
-                        $line->quantity,
-                        $line->unitPrice,
-                        $line->costPrice,
-                        $line->taxRate,
-                        $line->gross->toDecimal(),
-                    ),
-                    $totals->lines,
-                ),
             );
 
-            $this->stock->bulkDeduct(array_map(
+            $deductions = $this->stock->bulkDeduct(array_map(
                 static fn ($line): StockMovementData => new StockMovementData(
                     $line->variantId,
                     $data->branchId,
@@ -138,6 +126,38 @@ final readonly class CreateInvoiceAction
                     StockMovementType::SalesDeduction,
                     'invoice',
                     $invoiceId,
+                ),
+                $totals->lines,
+            ));
+
+            $costedItems = array_map(
+                static function ($line) use ($deductions, $data): PricedInvoiceItem {
+                    $cost = $deductions[$line->variantId.':'.$data->branchId];
+
+                    return new PricedInvoiceItem(
+                        $line->variantId,
+                        $line->quantity,
+                        $line->unitPrice,
+                        $cost->weightedUnitCost,
+                        $line->taxId,
+                        $line->taxRate,
+                        $line->taxAccountId,
+                        $cost->totalCost->toDecimal(),
+                    );
+                },
+                $totals->lines,
+            );
+            $totals = $this->domain->calculate($costedItems);
+            $this->sales->createInvoiceItems($invoiceId, array_map(
+                static fn ($line): InvoiceItemRecord => new InvoiceItemRecord(
+                    $line->variantId,
+                    $line->taxId,
+                    $line->quantity,
+                    $line->unitPrice,
+                    $line->costPrice,
+                    $line->taxRate,
+                    $line->gross->toDecimal(),
+                    $line->cost->toDecimal(),
                 ),
                 $totals->lines,
             ));
