@@ -1,5 +1,6 @@
 <?php
 
+use App\Infrastructure\Providers\AccountingServiceProvider;
 use App\Infrastructure\Providers\InventoryServiceProvider;
 use App\Infrastructure\Providers\MorphMapServiceProvider;
 use App\Infrastructure\Providers\PurchasingServiceProvider;
@@ -9,6 +10,7 @@ use App\Providers\AppServiceProvider;
 
 return [
     AppServiceProvider::class,
+    AccountingServiceProvider::class,
     InventoryServiceProvider::class,
     MorphMapServiceProvider::class,
     PurchasingServiceProvider::class,

@@ -6,8 +6,10 @@ use App\Application\DTOs\JournalEntryData;
 use App\Application\DTOs\JournalEntryLineData;
 use App\Domain\Entities\Money;
 use App\Domain\Exceptions\InvalidJournalEntryException;
+use App\Domain\Exceptions\LockedAccountingPeriodException;
 use App\Domain\Exceptions\TransactionRequiredException;
 use App\Domain\Exceptions\UnbalancedJournalEntryException;
+use App\Infrastructure\Models\AccountingPeriod;
 use App\Infrastructure\Models\Branch;
 use App\Infrastructure\Models\ChartOfAccount;
 use App\Infrastructure\Models\JournalEntry;
@@ -30,11 +32,18 @@ class CreateJournalEntryAction
             throw new InvalidJournalEntryException('Journal number and description are required.');
         }
 
-        if ($data->referenceId < 1 || Relation::getMorphedModel($data->referenceType) === null) {
-            throw new InvalidJournalEntryException('Journal reference must use a canonical morph alias and valid ID.');
+        $hasReferenceType = $data->referenceType !== null;
+        $hasReferenceId = $data->referenceId !== null;
+
+        if ($hasReferenceType !== $hasReferenceId) {
+            throw new InvalidJournalEntryException('Journal reference type and ID must both be null or both be present.');
         }
 
-        Branch::query()->findOrFail($data->branchId);
+        if ($data->referenceType !== null
+            && $data->referenceId !== null
+            && ($data->referenceId < 1 || Relation::getMorphedModel($data->referenceType) === null)) {
+            throw new InvalidJournalEntryException('Journal reference must use a canonical morph alias and valid ID.');
+        }
 
         $debitTotal = Money::zero();
         $creditTotal = Money::zero();
@@ -57,6 +66,29 @@ class CreateJournalEntryAction
         if ($debitTotal->compare($creditTotal) !== 0) {
             throw new UnbalancedJournalEntryException;
         }
+
+        $year = (int) $data->postedAt->format('Y');
+        $month = (int) $data->postedAt->format('n');
+        $timestamp = now();
+        AccountingPeriod::query()->insertOrIgnore([[
+            'tenant_id' => current_tenant_id(),
+            'year' => $year,
+            'month' => $month,
+            'is_locked' => false,
+            'created_at' => $timestamp,
+            'updated_at' => $timestamp,
+        ]]);
+        $period = AccountingPeriod::query()
+            ->where('year', $year)
+            ->where('month', $month)
+            ->lockForUpdate()
+            ->firstOrFail();
+
+        if ($period->is_locked) {
+            throw new LockedAccountingPeriodException('Journal entries cannot be posted to a locked accounting period.');
+        }
+
+        Branch::query()->findOrFail($data->branchId);
 
         sort($accountIds);
         $accounts = ChartOfAccount::query()
