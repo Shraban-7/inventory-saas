@@ -1,10 +1,14 @@
 <?php
 
 use App\Domain\Exceptions\CreditQuantityExceededException;
+use App\Domain\Exceptions\IdempotencyConflictException;
 use App\Domain\Exceptions\InsufficientStockException;
+use App\Domain\Exceptions\InvalidBillStateException;
 use App\Domain\Exceptions\InvalidCreditNoteStateException;
 use App\Domain\Exceptions\InvalidInvoiceStateException;
 use App\Domain\Exceptions\InvalidJournalEntryException;
+use App\Domain\Exceptions\InvalidPurchaseOrderStateException;
+use App\Domain\Exceptions\InvalidPurchasingDataException;
 use App\Domain\Exceptions\InvalidSalesDataException;
 use App\Domain\Exceptions\UnbalancedJournalEntryException;
 use App\Presentation\Middleware\EnforceIdempotencyKey;
@@ -102,6 +106,39 @@ return Application::configure(basePath: dirname(__DIR__))
         ));
 
         $exceptions->render(function (DomainException $exception, Request $request) {
+            if ($exception instanceof IdempotencyConflictException) {
+                return ProblemDetails::response(
+                    $request,
+                    Response::HTTP_CONFLICT,
+                    'Idempotency conflict',
+                    $exception->getMessage(),
+                    [],
+                    'urn:problem:idempotency',
+                );
+            }
+
+            if ($exception instanceof InvalidPurchaseOrderStateException || $exception instanceof InvalidBillStateException) {
+                return ProblemDetails::response(
+                    $request,
+                    Response::HTTP_CONFLICT,
+                    'Purchasing state conflict',
+                    $exception->getMessage(),
+                    [],
+                    'urn:problem:purchasing-state',
+                );
+            }
+
+            if ($exception instanceof InvalidPurchasingDataException) {
+                return ProblemDetails::response(
+                    $request,
+                    Response::HTTP_UNPROCESSABLE_ENTITY,
+                    'Purchasing transaction rejected',
+                    $exception->getMessage(),
+                    [],
+                    'urn:problem:purchasing-transaction',
+                );
+            }
+
             $processable = [
                 InvalidSalesDataException::class,
                 InvalidInvoiceStateException::class,
@@ -117,18 +154,22 @@ return Application::configure(basePath: dirname(__DIR__))
             }
 
             $detail = $exception->getMessage();
+            $isPurchasingRequest = $request->is('api/v1/goods-receipt-notes*')
+                || $request->is('api/v1/bills*');
 
             if (app()->isProduction() && ($exception instanceof InvalidJournalEntryException || $exception instanceof UnbalancedJournalEntryException)) {
-                $detail = 'The sales transaction could not be processed.';
+                $detail = $isPurchasingRequest
+                    ? 'The purchasing transaction could not be processed.'
+                    : 'The sales transaction could not be processed.';
             }
 
             return ProblemDetails::response(
                 $request,
                 Response::HTTP_UNPROCESSABLE_ENTITY,
-                'Sales transaction rejected',
+                $isPurchasingRequest ? 'Purchasing transaction rejected' : 'Sales transaction rejected',
                 $detail,
                 [],
-                'urn:problem:sales-transaction',
+                $isPurchasingRequest ? 'urn:problem:purchasing-transaction' : 'urn:problem:sales-transaction',
             );
         });
     })->create();

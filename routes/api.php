@@ -1,11 +1,15 @@
 <?php
 
+use App\Presentation\Controllers\BillController;
 use App\Presentation\Controllers\CreditNoteController;
 use App\Presentation\Controllers\CustomerController;
+use App\Presentation\Controllers\GoodsReceiptNoteController;
 use App\Presentation\Controllers\InvoiceController;
 use App\Presentation\Controllers\ProductController;
+use App\Presentation\Controllers\PurchaseOrderController;
 use App\Presentation\Controllers\StockAdjustmentController;
 use App\Presentation\Controllers\StockTransferController;
+use App\Presentation\Controllers\SupplierController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')
@@ -41,4 +45,29 @@ Route::prefix('v1')
             ->middleware(['can:stock.adjust', 'idempotency']);
         Route::post('stock-transfers', [StockTransferController::class, 'store'])
             ->middleware(['can:stock.transfer', 'idempotency']);
+
+        Route::get('suppliers', [SupplierController::class, 'index'])->middleware('can:purchase.create');
+        Route::post('suppliers', [SupplierController::class, 'store'])->middleware('can:purchase.create');
+        Route::get('suppliers/{supplierId}', [SupplierController::class, 'show'])->middleware('can:purchase.create');
+        Route::put('suppliers/{supplierId}', [SupplierController::class, 'update'])->middleware('can:purchase.create');
+
+        Route::get('purchase-orders', [PurchaseOrderController::class, 'index'])->middleware('can:purchase.create');
+        Route::post('purchase-orders', [PurchaseOrderController::class, 'store'])
+            ->middleware(['can:purchase.create', 'idempotency']);
+        Route::put('purchase-orders/{purchaseOrderId}/confirm', [PurchaseOrderController::class, 'confirm'])
+            ->middleware(['can:purchase.create', 'idempotency']);
+        Route::put('purchase-orders/{purchaseOrderId}/cancel', [PurchaseOrderController::class, 'cancel'])
+            ->middleware(['can:purchase.create', 'idempotency']);
+
+        Route::get('goods-receipt-notes', [GoodsReceiptNoteController::class, 'index'])->middleware('can:purchase.receive');
+        Route::post('goods-receipt-notes', [GoodsReceiptNoteController::class, 'store'])
+            ->middleware(['can:purchase.receive', 'idempotency']);
+
+        Route::get('bills', [BillController::class, 'index'])->middleware('can:purchase.create');
+        Route::post('bills', [BillController::class, 'store'])
+            ->middleware(['can:purchase.create', 'idempotency']);
+        Route::put('bills/{billId}/approve', [BillController::class, 'approve'])
+            ->middleware(['can:purchase.create', 'idempotency']);
+        Route::post('bills/{billId}/payments', [BillController::class, 'payment'])
+            ->middleware(['can:purchase.create', 'idempotency']);
     });

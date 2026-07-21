@@ -26,6 +26,7 @@ class CreditNoteItemResource extends JsonResource
             'cost_price_at_return' => $item->cost_price_at_return,
             'tax_rate_at_return' => $item->tax_rate_at_return,
             'line_total' => $item->line_total,
+            'cost_total_at_return' => $item->cost_total_at_return,
         ];
     }
 }
