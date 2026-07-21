@@ -20,5 +20,7 @@ it('reports tenant isolation violations', function () {
     expect($process->getExitCode())->not->toBe(0)
         ->and($output)->toContain('must use HasTenantScope')
         ->and($output)->toContain("DB::table('users')")
+        ->and($output)->toContain("DB::table('invoice_items')")
+        ->and($output)->toContain("DB::table('journal_entry_lines')")
         ->and($output)->toContain('withoutGlobalScopes() is forbidden');
 });

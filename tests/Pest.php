@@ -19,6 +19,9 @@ pest()->extend(TestCase::class)
     ->use(LazilyRefreshDatabase::class)
     ->in('Feature', 'Security');
 
+pest()->extend(TestCase::class)
+    ->in('MySql');
+
 /*
 |--------------------------------------------------------------------------
 | Expectations
