@@ -1,6 +1,7 @@
 <?php
 
 use App\Domain\Services\InvoiceNumberService;
+use App\Infrastructure\Models\InventoryLot;
 use App\Infrastructure\Models\Invoice;
 use App\Infrastructure\Models\StockLevel;
 use Illuminate\Support\Facades\DB;
@@ -20,6 +21,10 @@ it('creates exactly one hundred invoices with unique sequential numbers through 
     StockLevel::query()
         ->where('product_variant_id', $context->variant->getKey())
         ->update(['quantity_on_hand' => '1000.0000']);
+    InventoryLot::query()
+        ->where('product_variant_id', $context->variant->getKey())
+        ->where('branch_id', $context->branch->getKey())
+        ->update(['quantity_remaining' => '1000.0000']);
     $payloads = array_fill(0, 10, [
         'tenant_id' => $context->tenant->getKey(),
         'user_id' => $context->user->getKey(),

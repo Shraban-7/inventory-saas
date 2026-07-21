@@ -5,6 +5,7 @@ use App\Infrastructure\Models\AttributeValue;
 use App\Infrastructure\Models\AuditLog;
 use App\Infrastructure\Models\Branch;
 use App\Infrastructure\Models\Category;
+use App\Infrastructure\Models\InventoryLot;
 use App\Infrastructure\Models\Product;
 use App\Infrastructure\Models\ProductVariant;
 use App\Infrastructure\Models\Role;
@@ -89,6 +90,13 @@ it('transfers stock atomically between branches', function () {
         'product_variant_id' => $context['variant']->getKey(),
         'branch_id' => $context['from']->getKey(),
         'quantity_on_hand' => '5.0000',
+    ]);
+    InventoryLot::query()->create([
+        'product_variant_id' => $context['variant']->getKey(),
+        'branch_id' => $context['from']->getKey(),
+        'quantity_remaining' => '5.0000',
+        'unit_cost' => '10.0000',
+        'received_at' => '2026-07-21 00:00:00',
     ]);
 
     $this->postJson('/api/v1/stock-transfers', [

@@ -6,6 +6,7 @@ use App\Infrastructure\Models\Branch;
 use App\Infrastructure\Models\Category;
 use App\Infrastructure\Models\ChartOfAccount;
 use App\Infrastructure\Models\Customer;
+use App\Infrastructure\Models\InventoryLot;
 use App\Infrastructure\Models\Product;
 use App\Infrastructure\Models\ProductVariant;
 use App\Infrastructure\Models\Role;
@@ -61,6 +62,13 @@ final readonly class SalesContext
                 'product_variant_id' => $stockVariant->getKey(),
                 'branch_id' => $branch->getKey(),
                 'quantity_on_hand' => '20.0000',
+            ]);
+            InventoryLot::query()->create([
+                'product_variant_id' => $stockVariant->getKey(),
+                'branch_id' => $branch->getKey(),
+                'quantity_remaining' => '20.0000',
+                'unit_cost' => $stockVariant->cost_price,
+                'received_at' => '2026-07-01 00:00:00',
             ]);
         }
 

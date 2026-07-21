@@ -15,20 +15,31 @@ final class SalesWorkers
     {
         $barrier = sys_get_temp_dir().DIRECTORY_SEPARATOR.'inventory-sales-'.bin2hex(random_bytes(8)).'.barrier';
         $processes = [];
+        $readyFiles = [];
 
-        foreach ($payloads as $payload) {
+        foreach ($payloads as $index => $payload) {
+            $workerToken = (string) $index;
+            $readyFiles[] = $barrier.'.'.$workerToken.'.ready';
             $process = new Process([PHP_BINARY, base_path('tests/Fixtures/Concurrency/sales-worker.php'), $mode]);
-            $process->setInput(json_encode([...$payload, 'barrier' => $barrier], JSON_THROW_ON_ERROR));
+            $process->setInput(json_encode([
+                ...$payload,
+                'barrier' => $barrier,
+                'worker_token' => $workerToken,
+            ], JSON_THROW_ON_ERROR));
             $process->setTimeout(60);
             $process->start();
             $processes[] = $process;
         }
 
-        usleep(100_000);
-        file_put_contents($barrier, 'go', LOCK_EX);
         $results = [];
 
         try {
+            self::awaitReadyWorkers($processes, $readyFiles);
+
+            if (file_put_contents($barrier, 'go', LOCK_EX) === false) {
+                throw new RuntimeException('Concurrency runner could not release the barrier.');
+            }
+
             foreach ($processes as $process) {
                 $process->wait();
                 $output = trim($process->getOutput());
@@ -42,11 +53,49 @@ final class SalesWorkers
                 $results[] = $decoded;
             }
         } finally {
+            foreach ($processes as $process) {
+                if ($process->isRunning()) {
+                    $process->stop(1);
+                }
+            }
+
             if (is_file($barrier)) {
                 unlink($barrier);
+            }
+
+            foreach ($readyFiles as $readyFile) {
+                if (is_file($readyFile)) {
+                    unlink($readyFile);
+                }
             }
         }
 
         return $results;
+    }
+
+    /**
+     * @param  list<Process>  $processes
+     * @param  list<string>  $readyFiles
+     */
+    private static function awaitReadyWorkers(array $processes, array $readyFiles): void
+    {
+        $deadline = microtime(true) + 20;
+
+        while (count(array_filter($readyFiles, 'is_file')) !== count($readyFiles)) {
+            foreach ($processes as $process) {
+                if (! $process->isRunning()) {
+                    throw new RuntimeException(
+                        'Concurrency worker exited before the barrier: '.
+                        trim($process->getOutput().' '.$process->getErrorOutput()),
+                    );
+                }
+            }
+
+            if (microtime(true) >= $deadline) {
+                throw new RuntimeException('Concurrency workers did not reach the barrier in time.');
+            }
+
+            usleep(10_000);
+        }
     }
 }

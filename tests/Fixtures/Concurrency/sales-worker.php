@@ -2,11 +2,18 @@
 
 declare(strict_types=1);
 
+use App\Application\Actions\Purchasing\ProcessGoodsReceiptAction;
+use App\Application\Actions\Purchasing\RecordBillPaymentAction;
 use App\Application\Actions\Sales\ApproveCreditNoteAction;
 use App\Application\Actions\Sales\CreateInvoiceAction;
+use App\Application\DTOs\BillPaymentData;
+use App\Application\DTOs\GoodsReceiptData;
+use App\Application\DTOs\GrnItemData;
 use App\Application\DTOs\InvoiceData;
 use App\Application\DTOs\InvoiceItemData;
+use App\Domain\Entities\PurchasePaymentMethod;
 use App\Domain\Services\InvoiceNumberService;
+use App\Infrastructure\Models\Bill;
 use App\Infrastructure\Models\Tenant;
 use Illuminate\Contracts\Console\Kernel;
 
@@ -35,6 +42,16 @@ function awaitBarrier(array $payload): void
 
     if (! is_string($barrier) || $barrier === '') {
         return;
+    }
+
+    $workerToken = $payload['worker_token'] ?? null;
+
+    if (is_string($workerToken) && $workerToken !== '') {
+        $readyFile = $barrier.'.'.$workerToken.'.ready';
+
+        if (file_put_contents($readyFile, 'ready', LOCK_EX) === false) {
+            throw new RuntimeException('Concurrency worker could not signal readiness.');
+        }
     }
 
     $deadline = microtime(true) + 20;
@@ -104,6 +121,56 @@ try {
             'invoice_number' => $invoiceNumbers[0] ?? null,
             'invoice_ids' => $invoiceIds,
             'invoice_numbers' => $invoiceNumbers,
+        ]);
+    }
+
+    if ($mode === 'process-grn') {
+        $items = array_map(
+            static fn (array $item): GrnItemData => new GrnItemData(
+                (int) $item['variant_id'],
+                (string) $item['quantity'],
+                (string) $item['unit_cost'],
+            ),
+            $decoded['items'],
+        );
+        $receipt = app(ProcessGoodsReceiptAction::class)->handle(
+            new GoodsReceiptData(
+                (int) $decoded['branch_id'],
+                (int) $decoded['supplier_id'],
+                isset($decoded['purchase_order_id']) ? (int) $decoded['purchase_order_id'] : null,
+                new DateTimeImmutable((string) $decoded['received_at']),
+                isset($decoded['notes']) ? (string) $decoded['notes'] : null,
+                (string) $decoded['idempotency_key'],
+                (string) $decoded['payload_hash'],
+                $items,
+            ),
+            (int) $decoded['user_id'],
+        );
+
+        respond([
+            'ok' => true,
+            'grn_id' => $receipt->getKey(),
+            'grn_number' => $receipt->grn_number,
+        ]);
+    }
+
+    if ($mode === 'pay-bill') {
+        $payment = app(RecordBillPaymentAction::class)->handle(
+            (int) $decoded['bill_id'],
+            new BillPaymentData(
+                (string) $decoded['amount'],
+                PurchasePaymentMethod::from((string) $decoded['payment_method']),
+                new DateTimeImmutable((string) $decoded['payment_date']),
+                isset($decoded['reference']) ? (string) $decoded['reference'] : null,
+            ),
+            (int) $decoded['user_id'],
+        );
+        $billBalance = Bill::query()->findOrFail((int) $decoded['bill_id'])->balance_due;
+
+        respond([
+            'ok' => true,
+            'payment_id' => $payment->getKey(),
+            'bill_balance' => $billBalance,
         ]);
     }
 
