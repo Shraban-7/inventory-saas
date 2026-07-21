@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use App\Application\Actions\Accounting\CreateManualJournalAction;
+use App\Application\Actions\Accounting\LockAccountingPeriodAction;
 use App\Application\Actions\Purchasing\ProcessGoodsReceiptAction;
 use App\Application\Actions\Purchasing\RecordBillPaymentAction;
 use App\Application\Actions\Sales\ApproveCreditNoteAction;
@@ -11,6 +13,9 @@ use App\Application\DTOs\GoodsReceiptData;
 use App\Application\DTOs\GrnItemData;
 use App\Application\DTOs\InvoiceData;
 use App\Application\DTOs\InvoiceItemData;
+use App\Application\DTOs\JournalEntryLineData;
+use App\Application\DTOs\ManualJournalData;
+use App\Application\Jobs\AggregateJournalRollupsJob;
 use App\Domain\Entities\PurchasePaymentMethod;
 use App\Domain\Services\InvoiceNumberService;
 use App\Infrastructure\Models\Bill;
@@ -181,6 +186,55 @@ try {
         );
 
         respond(['ok' => true, 'credit_note_id' => $creditNote->getKey()]);
+    }
+
+    if ($mode === 'create-manual-journal') {
+        $lines = array_map(
+            static fn (array $line): JournalEntryLineData => new JournalEntryLineData(
+                (int) $line['coa_id'],
+                (string) $line['debit'],
+                (string) $line['credit'],
+                isset($line['description']) ? (string) $line['description'] : null,
+            ),
+            $decoded['lines'],
+        );
+        $journal = app(CreateManualJournalAction::class)->handle(
+            new ManualJournalData(
+                (int) $decoded['branch_id'],
+                new DateTimeImmutable((string) $decoded['posted_at']),
+                (string) $decoded['description'],
+                $lines,
+            ),
+            (int) $decoded['user_id'],
+        );
+
+        respond([
+            'ok' => true,
+            'journal_entry_id' => $journal->getKey(),
+            'journal_entry_number' => $journal->journal_entry_number,
+        ]);
+    }
+
+    if ($mode === 'lock-accounting-period') {
+        $period = app(LockAccountingPeriodAction::class)->handle(
+            (int) $decoded['period_id'],
+            (int) $decoded['user_id'],
+        );
+
+        respond([
+            'ok' => true,
+            'accounting_period_id' => $period->getKey(),
+            'is_locked' => $period->is_locked,
+        ]);
+    }
+
+    if ($mode === 'aggregate-journal-rollup') {
+        (new AggregateJournalRollupsJob(
+            (int) $decoded['tenant_id'],
+            (string) $decoded['date'],
+        ))->handle();
+
+        respond(['ok' => true]);
     }
 
     throw new InvalidArgumentException("Unknown worker mode: {$mode}");

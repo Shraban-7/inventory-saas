@@ -13,16 +13,35 @@ final class SalesWorkers
      */
     public static function run(string $mode, array $payloads): array
     {
+        return self::runMixed(array_map(
+            static fn (array $payload): array => [
+                'mode' => $mode,
+                'payload' => $payload,
+            ],
+            $payloads,
+        ));
+    }
+
+    /**
+     * @param  list<array{mode: string, payload: array<string, mixed>}>  $workers
+     * @return list<array<string, mixed>>
+     */
+    public static function runMixed(array $workers): array
+    {
         $barrier = sys_get_temp_dir().DIRECTORY_SEPARATOR.'inventory-sales-'.bin2hex(random_bytes(8)).'.barrier';
         $processes = [];
         $readyFiles = [];
 
-        foreach ($payloads as $index => $payload) {
+        foreach ($workers as $index => $worker) {
             $workerToken = (string) $index;
             $readyFiles[] = $barrier.'.'.$workerToken.'.ready';
-            $process = new Process([PHP_BINARY, base_path('tests/Fixtures/Concurrency/sales-worker.php'), $mode]);
+            $process = new Process([
+                PHP_BINARY,
+                base_path('tests/Fixtures/Concurrency/sales-worker.php'),
+                $worker['mode'],
+            ]);
             $process->setInput(json_encode([
-                ...$payload,
+                ...$worker['payload'],
                 'barrier' => $barrier,
                 'worker_token' => $workerToken,
             ], JSON_THROW_ON_ERROR));
