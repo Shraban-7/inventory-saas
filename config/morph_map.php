@@ -16,4 +16,7 @@ return [
     'product_variant' => 'App\\Infrastructure\\Models\\ProductVariant',
     'stock_level' => 'App\\Infrastructure\\Models\\StockLevel',
     'stock_movement' => 'App\\Infrastructure\\Models\\StockMovement',
+    'journal_entry' => 'App\\Infrastructure\\Models\\JournalEntry',
+    'accounting_period' => 'App\\Infrastructure\\Models\\AccountingPeriod',
+    'report_job' => 'App\\Infrastructure\\Models\\ReportJob',
 ];
