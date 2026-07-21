@@ -1,5 +1,7 @@
 <?php
 
+use App\Application\Jobs\DispatchJournalRollupsJob;
+use App\Application\Jobs\PruneExpiredReportJobsJob;
 use App\Application\Jobs\PruneIdempotencyRequestsJob;
 use App\Application\Jobs\ReconcileStockLevelsJob;
 use Illuminate\Foundation\Inspiring;
@@ -16,4 +18,14 @@ Schedule::job(new PruneIdempotencyRequestsJob)
 
 Schedule::job(new ReconcileStockLevelsJob)
     ->dailyAt('02:00')
+    ->withoutOverlapping();
+
+Schedule::job(new DispatchJournalRollupsJob, 'reports')
+    ->dailyAt('02:00')
+    ->onOneServer()
+    ->withoutOverlapping();
+
+Schedule::job(new PruneExpiredReportJobsJob, 'reports')
+    ->daily()
+    ->onOneServer()
     ->withoutOverlapping();
