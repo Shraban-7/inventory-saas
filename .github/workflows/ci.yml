@@ -64,4 +64,7 @@ jobs:
           extensions: mbstring, pdo_mysql, redis
           coverage: none
       - uses: ramsey/composer-install@v3
+      - run: php artisan migrate:fresh --force
       - run: php artisan test --compact tests/Feature/TenancyTest.php tests/Feature/IdempotencyTest.php tests/Feature/InventoryTest.php tests/Feature/StockLedgerTest.php tests/Security/CrossTenantTest.php
+      - run: php artisan test --compact tests/Feature/CreateJournalEntryActionTest.php tests/Feature/CustomerTest.php tests/Feature/InvoiceSchemaTest.php tests/Feature/SalesTest.php tests/Feature/InvoiceApiTest.php tests/Feature/CreditNoteTest.php tests/Feature/MorphMapTest.php tests/Security/SalesCrossTenantTest.php tests/Security/SalesAuthorizationTest.php
+      - run: php artisan test --compact tests/MySql

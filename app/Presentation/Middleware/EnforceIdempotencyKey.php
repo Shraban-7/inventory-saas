@@ -62,19 +62,25 @@ class EnforceIdempotencyKey
                         );
                     }
 
+                    $contentType = $storedRequest->response_body['content_type'] ?? 'application/json';
+
                     return response(
                         (string) $storedRequest->response_body['content'],
                         $storedRequest->response_status,
-                        ['Content-Type' => 'application/json'],
+                        ['Content-Type' => $contentType !== '' ? $contentType : 'application/json'],
                     );
                 }
 
                 $response = $next($request);
+                $contentType = $response->headers->get('Content-Type');
 
                 IdempotencyRequest::query()->create([
                     'key' => $key,
                     'payload_hash' => $payloadHash,
-                    'response_body' => ['content' => $response->getContent()],
+                    'response_body' => [
+                        'content' => $response->getContent(),
+                        'content_type' => is_string($contentType) && $contentType !== '' ? $contentType : 'application/json',
+                    ],
                     'response_status' => $response->getStatusCode(),
                     'expires_at' => now()->addDay(),
                 ]);

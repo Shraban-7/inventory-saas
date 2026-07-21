@@ -39,9 +39,12 @@ class ForbidTenantTableQueryBuilderRule implements Rule
         'stock_transfers',
         'stock_transfer_items',
         'customers',
+        'invoice_sequences',
         'invoices',
+        'invoice_items',
         'receipts',
         'credit_notes',
+        'credit_note_items',
         'suppliers',
         'purchase_orders',
         'goods_receipt_notes',
@@ -50,6 +53,7 @@ class ForbidTenantTableQueryBuilderRule implements Rule
         'chart_of_accounts',
         'taxes',
         'journal_entries',
+        'journal_entry_lines',
         'audit_logs',
     ];
 

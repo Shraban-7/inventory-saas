@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 
 /**
  * @property string $payload_hash
- * @property array{content: string} $response_body
+ * @property array{content: string, content_type?: string} $response_body
  * @property int $response_status
  * @property CarbonImmutable $expires_at
  */

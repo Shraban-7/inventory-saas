@@ -9,21 +9,41 @@ class BranchAuthorizationService
     /** @param list<int> $branchIds */
     public function allows(User $user, string $permission, array $branchIds): bool
     {
-        $roles = $user->roles()->with('permissions')->get();
+        $authorizedBranchIds = $this->authorizedBranchIds($user, $permission);
+
+        if ($authorizedBranchIds === null) {
+            return true;
+        }
 
         foreach ($branchIds as $branchId) {
-            $allowed = $roles->contains(function ($role) use ($branchId, $permission): bool {
-                $roleBranchId = $role->pivot?->getAttribute('branch_id');
-
-                return ($roleBranchId === null || (int) $roleBranchId === $branchId)
-                    && $role->permissions->contains('name', $permission);
-            });
-
-            if (! $allowed) {
+            if (! in_array($branchId, $authorizedBranchIds, true)) {
                 return false;
             }
         }
 
         return true;
+    }
+
+    /** @return list<int>|null Null means all tenant branches are authorized. */
+    public function authorizedBranchIds(User $user, string $permission): ?array
+    {
+        $branchIds = [];
+        $roles = $user->roles()->with('permissions')->get();
+
+        foreach ($roles as $role) {
+            if (! $role->permissions->contains('name', $permission)) {
+                continue;
+            }
+
+            $branchId = $role->pivot?->getAttribute('branch_id');
+
+            if ($branchId === null) {
+                return null;
+            }
+
+            $branchIds[] = (int) $branchId;
+        }
+
+        return array_values(array_unique($branchIds));
     }
 }
