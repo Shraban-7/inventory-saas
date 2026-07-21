@@ -1,0 +1,25 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    paths:
+        - app
+    level: 8
+
+services:
+    -
+        class: App\Infrastructure\StaticAnalysis\Rules\ForbidTenantTableQueryBuilderRule
+        tags:
+            - phpstan.rules.rule
+    -
+        class: App\Infrastructure\StaticAnalysis\Rules\RequireTenantScopeRule
+        tags:
+            - phpstan.rules.rule
+    -
+        class: App\Infrastructure\StaticAnalysis\Rules\ForbidScopeBypassMethodCallRule
+        tags:
+            - phpstan.rules.rule
+    -
+        class: App\Infrastructure\StaticAnalysis\Rules\ForbidScopeBypassStaticCallRule
+        tags:
+            - phpstan.rules.rule
