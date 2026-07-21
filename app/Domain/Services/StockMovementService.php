@@ -2,19 +2,31 @@
 
 namespace App\Domain\Services;
 
+use App\Domain\Entities\LotBalance;
 use App\Domain\Entities\Quantity;
-use App\Domain\Entities\StockBalance;
+use App\Domain\Entities\StockDeductionResult;
+use App\Domain\Entities\StockLevelKey;
 use App\Domain\Entities\StockMovementData;
 use App\Domain\Entities\StockMovementType;
 use App\Domain\Exceptions\InsufficientStockException;
 use App\Domain\Repositories\BulkStockRepository;
+use App\Domain\Repositories\InventoryLotRepository;
 use App\Domain\Repositories\StockRepository;
+use DateTimeImmutable;
 use InvalidArgumentException;
 use LogicException;
 
 final readonly class StockMovementService
 {
-    public function __construct(private StockRepository $repository) {}
+    public function __construct(
+        private StockRepository $repository,
+        private ?InventoryLotRepository $lots = null,
+        ?FifoCostCalculator $fifo = null,
+    ) {
+        $this->fifo = $fifo ?? new FifoCostCalculator;
+    }
+
+    private FifoCostCalculator $fifo;
 
     public function deduct(
         int $variantId,
@@ -24,10 +36,26 @@ final readonly class StockMovementService
         StockMovementType $type,
         ?string $sourceType,
         ?int $sourceId,
-    ): void {
-        $quantity = $this->positiveQuantity($qty);
-        $balance = $this->repository->lockLevels($variantId, [$branchId])[$branchId];
-        $this->deductLocked($balance, $quantity, $unitCost, $type, $sourceType, $sourceId);
+    ): StockDeductionResult {
+        if ($this->lots === null) {
+            $quantity = $this->positiveQuantity($qty);
+            $balance = $this->repository->lockLevels($variantId, [$branchId])[$branchId];
+            $remaining = $balance->quantity->subtract($quantity);
+
+            if ($remaining->isNegative()) {
+                throw new InsufficientStockException;
+            }
+
+            $balance->quantity = $remaining;
+            $this->repository->saveBalance($balance);
+            $this->repository->appendMovement($variantId, $branchId, Quantity::from('-'.$quantity->toDecimal()), $unitCost, $type, $sourceType, $sourceId);
+
+            return StockDeductionResult::fromUnitCost($quantity, $unitCost);
+        }
+
+        return $this->bulkDeduct([
+            new StockMovementData($variantId, $branchId, $qty, $unitCost, $type, $sourceType, $sourceId),
+        ])["{$variantId}:{$branchId}"];
     }
 
     public function add(
@@ -38,12 +66,11 @@ final readonly class StockMovementService
         StockMovementType $type,
         ?string $sourceType,
         ?int $sourceId,
+        ?DateTimeImmutable $receivedAt = null,
     ): void {
-        $quantity = $this->positiveQuantity($qty);
-        $balance = $this->repository->lockLevels($variantId, [$branchId])[$branchId];
-        $balance->quantity = $balance->quantity->add($quantity);
-        $this->repository->saveBalance($balance);
-        $this->repository->appendMovement($variantId, $branchId, $quantity, $unitCost, $type, $sourceType, $sourceId);
+        $this->bulkAdd([
+            new StockMovementData($variantId, $branchId, $qty, $unitCost, $type, $sourceType, $sourceId, $receivedAt),
+        ]);
     }
 
     public function transfer(int $variantId, int $fromBranchId, int $toBranchId, string $qty, ?int $sourceId = null): void
@@ -54,23 +81,76 @@ final readonly class StockMovementService
 
         $quantity = $this->positiveQuantity($qty);
         $balances = $this->repository->lockLevels($variantId, [$fromBranchId, $toBranchId]);
-        $this->deductLocked($balances[$fromBranchId], $quantity, null, StockMovementType::TransferOut, 'stock_transfer', $sourceId);
+
+        if ($this->lots === null) {
+            $remaining = $balances[$fromBranchId]->quantity->subtract($quantity);
+
+            if ($remaining->isNegative()) {
+                throw new InsufficientStockException;
+            }
+
+            $balances[$fromBranchId]->quantity = $remaining;
+            $this->repository->saveBalance($balances[$fromBranchId]);
+            $this->repository->appendMovement($variantId, $fromBranchId, Quantity::from('-'.$quantity->toDecimal()), null, StockMovementType::TransferOut, 'stock_transfer', $sourceId);
+            $balances[$toBranchId]->quantity = $balances[$toBranchId]->quantity->add($quantity);
+            $this->repository->saveBalance($balances[$toBranchId]);
+            $this->repository->appendMovement($variantId, $toBranchId, $quantity, null, StockMovementType::TransferIn, 'stock_transfer', $sourceId);
+
+            return;
+        }
+
+        $key = new StockLevelKey($variantId, $fromBranchId);
+        $destinationKey = new StockLevelKey($variantId, $toBranchId);
+        $lotRepository = $this->lotRepository();
+        $method = $lotRepository->costingMethods([$key, $destinationKey])[$variantId] ?? 'avco';
+        $lotGroups = $method === 'fifo' ? $lotRepository->lockLots([$key, $destinationKey]) : [];
+        $sourceLots = $lotGroups[$key->value()] ?? [];
+        $result = $method === 'fifo'
+            ? $this->calculateAllocation($sourceLots, $quantity, StockMovementType::TransferOut)
+            : StockDeductionResult::fromUnitCost($quantity, null);
+
+        $remaining = $balances[$fromBranchId]->quantity->subtract($quantity);
+
+        if ($remaining->isNegative()) {
+            throw new InsufficientStockException;
+        }
+
+        $balances[$fromBranchId]->quantity = $remaining;
+        $this->persistAllocations($sourceLots, $result);
+        $this->repository->saveBalance($balances[$fromBranchId]);
+        $this->repository->appendMovement($variantId, $fromBranchId, Quantity::from('-'.$quantity->toDecimal()), $result->weightedUnitCost, StockMovementType::TransferOut, 'stock_transfer', $sourceId);
+
         $destination = $balances[$toBranchId];
         $destination->quantity = $destination->quantity->add($quantity);
         $this->repository->saveBalance($destination);
-        $this->repository->appendMovement($variantId, $toBranchId, $quantity, null, StockMovementType::TransferIn, 'stock_transfer', $sourceId);
+        $this->repository->appendMovement($variantId, $toBranchId, $quantity, $result->weightedUnitCost, StockMovementType::TransferIn, 'stock_transfer', $sourceId);
+
+        if ($method === 'fifo') {
+            foreach ($result->allocations as $allocation) {
+                $lotRepository->create($variantId, $toBranchId, $allocation->quantity->toDecimal(), $allocation->unitCost, $allocation->receivedAt);
+            }
+        }
     }
 
     /**
      * @param  list<StockMovementData>  $movements
+     * @return array<string, StockDeductionResult>
      */
-    public function bulkDeduct(array $movements): void
+    public function bulkDeduct(array $movements): array
     {
         $quantities = $this->validateBulkMovements($movements);
+        $keys = array_map(static fn (StockMovementData $movement) => $movement->key(), $movements);
         $balances = $this->bulkRepository()->lockLevelPairs(array_map(
             static fn (StockMovementData $movement) => $movement->key(),
             $movements,
         ));
+        $lotRepository = $this->lotRepository();
+        $methods = $lotRepository->costingMethods($keys);
+        $lotGroups = $lotRepository->lockLots(array_values(array_filter(
+            $keys,
+            static fn ($key): bool => ($methods[$key->variantId] ?? 'avco') === 'fifo',
+        )));
+        $results = [];
 
         foreach ($movements as $movement) {
             $key = $movement->key()->value();
@@ -81,21 +161,27 @@ final readonly class StockMovementService
             }
 
             $balances[$key]->quantity = $remaining;
+            $results[$key] = ($methods[$movement->variantId] ?? 'avco') === 'fifo'
+                ? $this->calculateAllocation($lotGroups[$key] ?? [], $quantities[$key], $movement->type)
+                : StockDeductionResult::fromUnitCost($quantities[$key], $movement->unitCost);
         }
 
         foreach ($movements as $movement) {
             $key = $movement->key()->value();
+            $this->persistAllocations($lotGroups[$key] ?? [], $results[$key]);
             $this->repository->saveBalance($balances[$key]);
             $this->repository->appendMovement(
                 $movement->variantId,
                 $movement->branchId,
                 Quantity::from('-'.$quantities[$key]->toDecimal()),
-                $movement->unitCost,
+                $results[$key]->weightedUnitCost,
                 $movement->type,
                 $movement->sourceType,
                 $movement->sourceId,
             );
         }
+
+        return $results;
     }
 
     /**
@@ -104,10 +190,19 @@ final readonly class StockMovementService
     public function bulkAdd(array $movements): void
     {
         $quantities = $this->validateBulkMovements($movements);
-        $balances = $this->bulkRepository()->lockLevelPairs(array_map(
+        $keys = array_map(
             static fn (StockMovementData $movement) => $movement->key(),
             $movements,
-        ));
+        );
+        $balances = $this->bulkRepository()->lockLevelPairs($keys);
+        $lotRepository = $this->lotRepository();
+        $methods = $lotRepository->costingMethods($keys);
+
+        foreach ($movements as $movement) {
+            if (($methods[$movement->variantId] ?? 'avco') === 'fifo' && $movement->unitCost === null) {
+                throw new InvalidArgumentException('FIFO inbound movements require a unit cost.');
+            }
+        }
 
         foreach ($movements as $movement) {
             $key = $movement->key()->value();
@@ -126,20 +221,17 @@ final readonly class StockMovementService
                 $movement->sourceType,
                 $movement->sourceId,
             );
+
+            if (($methods[$movement->variantId] ?? 'avco') === 'fifo') {
+                $lotRepository->create(
+                    $movement->variantId,
+                    $movement->branchId,
+                    $quantities[$key]->toDecimal(),
+                    $movement->unitCost ?? throw new LogicException('Validated FIFO unit cost is missing.'),
+                    $movement->receivedAt ?? new DateTimeImmutable,
+                );
+            }
         }
-    }
-
-    private function deductLocked(StockBalance $balance, Quantity $quantity, ?string $unitCost, StockMovementType $type, ?string $sourceType, ?int $sourceId): void
-    {
-        $remaining = $balance->quantity->subtract($quantity);
-
-        if ($remaining->isNegative()) {
-            throw new InsufficientStockException;
-        }
-
-        $balance->quantity = $remaining;
-        $this->repository->saveBalance($balance);
-        $this->repository->appendMovement($balance->variantId, $balance->branchId, Quantity::from('-'.$quantity->toDecimal()), $unitCost, $type, $sourceType, $sourceId);
     }
 
     private function positiveQuantity(string $quantity): Quantity
@@ -181,5 +273,34 @@ final readonly class StockMovementService
         }
 
         return $this->repository;
+    }
+
+    /** @param list<LotBalance> $lots */
+    private function calculateAllocation(array $lots, Quantity $quantity, StockMovementType $type): StockDeductionResult
+    {
+        return $type === StockMovementType::PurchaseReturn
+            ? $this->fifo->newestFirst($lots, $quantity->toDecimal())
+            : $this->fifo->oldestFirst($lots, $quantity->toDecimal());
+    }
+
+    /** @param list<LotBalance> $lots */
+    private function persistAllocations(array $lots, StockDeductionResult $result): void
+    {
+        $byId = [];
+
+        foreach ($lots as $lot) {
+            $byId[$lot->id] = $lot;
+        }
+
+        foreach ($result->allocations as $allocation) {
+            $lot = $byId[$allocation->lotId];
+            $lot->quantity = $lot->quantity->subtract($allocation->quantity);
+            $this->lotRepository()->save($lot);
+        }
+    }
+
+    private function lotRepository(): InventoryLotRepository
+    {
+        return $this->lots ?? throw new LogicException('The configured stock service does not support inventory lots.');
     }
 }
