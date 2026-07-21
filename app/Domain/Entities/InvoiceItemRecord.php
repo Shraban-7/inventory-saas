@@ -12,5 +12,6 @@ final readonly class InvoiceItemRecord
         public string $costPrice,
         public ?string $taxRate,
         public string $lineTotal,
+        public ?string $costTotal = null,
     ) {}
 }

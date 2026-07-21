@@ -2,6 +2,8 @@
 
 namespace App\Domain\Entities;
 
+use DateTimeImmutable;
+
 final readonly class StockMovementData
 {
     public function __construct(
@@ -12,6 +14,7 @@ final readonly class StockMovementData
         public StockMovementType $type,
         public ?string $sourceType,
         public ?int $sourceId,
+        public ?DateTimeImmutable $receivedAt = null,
     ) {}
 
     public function key(): StockLevelKey

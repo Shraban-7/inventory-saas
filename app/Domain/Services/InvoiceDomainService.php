@@ -33,7 +33,9 @@ final class InvoiceDomainService
             }
 
             $net = Money::quantityTimesPrice($item->quantity, $item->unitPrice);
-            $cost = Money::quantityTimesPrice($item->quantity, $item->currentCost);
+            $cost = $item->exactCostTotal === null
+                ? Money::quantityTimesPrice($item->quantity, $item->currentCost)
+                : Money::fromDecimal($item->exactCostTotal);
             $tax = $item->taxRate === null ? Money::zero() : $net->percentage($item->taxRate);
             $gross = $net->add($tax);
 

@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['tenant_id', 'invoice_id', 'product_variant_id', 'tax_id', 'quantity', 'unit_price_at_sale', 'cost_price_at_sale', 'tax_rate_at_sale', 'line_total'])]
+#[Fillable(['tenant_id', 'invoice_id', 'product_variant_id', 'tax_id', 'quantity', 'unit_price_at_sale', 'cost_price_at_sale', 'tax_rate_at_sale', 'line_total', 'cost_total_at_sale'])]
 class InvoiceItem extends Model
 {
     use HasTenantScope, IsImmutable;
@@ -40,6 +40,7 @@ class InvoiceItem extends Model
             'cost_price_at_sale' => 'decimal:4',
             'tax_rate_at_sale' => 'decimal:4',
             'line_total' => 'decimal:2',
+            'cost_total_at_sale' => 'decimal:2',
         ];
     }
 }

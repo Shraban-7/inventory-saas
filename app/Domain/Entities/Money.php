@@ -92,6 +92,36 @@ final readonly class Money
         return sprintf('%s%d.%02d', $sign, intdiv($absolute, 100), $absolute % 100);
     }
 
+    public function unitPriceForQuantity(Quantity $quantity): string
+    {
+        if (! $quantity->isPositive() || $this->isNegative()) {
+            throw new InvalidArgumentException('A positive quantity and non-negative money are required.');
+        }
+
+        $units = $quantity->units();
+        [$scaledPrice, $remainder] = self::divideDigitsByInt(
+            (string) $this->cents.'000000',
+            $units,
+        );
+
+        if ($remainder * 2 >= $units) {
+            $scaledPrice = self::incrementDigits($scaledPrice);
+        }
+
+        $scaledPrice = ltrim($scaledPrice, '0');
+        $scaledPrice = $scaledPrice === '' ? '0' : $scaledPrice;
+
+        if (mb_strlen($scaledPrice) > 15) {
+            throw new OverflowException('Calculated unit price exceeds decimal(15,4) bounds.');
+        }
+
+        $padded = str_pad($scaledPrice, 5, '0', STR_PAD_LEFT);
+
+        $whole = ltrim(mb_substr($padded, 0, -4), '0');
+
+        return ($whole === '' ? '0' : $whole).'.'.mb_substr($padded, -4);
+    }
+
     /**
      * @return array{bool, non-empty-string}
      */
@@ -171,5 +201,26 @@ final readonly class Money
         }
 
         return '1'.implode('', $characters);
+    }
+
+    /** @return array{non-empty-string, int} */
+    private static function divideDigitsByInt(string $digits, int $divisor): array
+    {
+        if ($divisor <= 0) {
+            throw new InvalidArgumentException('The divisor must be positive.');
+        }
+
+        $quotient = '';
+        $remainder = 0;
+
+        foreach (str_split($digits) as $digit) {
+            $value = ($remainder * 10) + (int) $digit;
+            $quotient .= (string) intdiv($value, $divisor);
+            $remainder = $value % $divisor;
+        }
+
+        $quotient = ltrim($quotient, '0');
+
+        return [$quotient === '' ? '0' : $quotient, $remainder];
     }
 }

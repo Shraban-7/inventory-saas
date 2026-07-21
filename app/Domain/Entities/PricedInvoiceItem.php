@@ -12,5 +12,6 @@ final readonly class PricedInvoiceItem
         public ?int $taxId,
         public ?string $taxRate,
         public ?int $taxAccountId,
+        public ?string $exactCostTotal = null,
     ) {}
 }

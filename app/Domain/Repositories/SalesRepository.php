@@ -9,9 +9,14 @@ use App\Domain\Entities\InvoiceRecord;
 
 interface SalesRepository
 {
+    public function createInvoiceHeader(InvoiceRecord $invoice): int;
+
     /**
      * @param  list<InvoiceItemRecord>  $items
      */
+    public function createInvoiceItems(int $invoiceId, array $items): void;
+
+    /** @param list<InvoiceItemRecord> $items */
     public function createInvoice(InvoiceRecord $invoice, array $items): int;
 
     /**

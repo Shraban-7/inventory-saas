@@ -46,6 +46,21 @@ final readonly class Quantity
         return $this->units === $quantity->units;
     }
 
+    public function compare(self $quantity): int
+    {
+        return $this->units <=> $quantity->units;
+    }
+
+    public function isZero(): bool
+    {
+        return $this->units === 0;
+    }
+
+    public function units(): int
+    {
+        return $this->units;
+    }
+
     public function abs(): self
     {
         return new self(abs($this->units));

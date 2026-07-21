@@ -15,6 +15,14 @@ final class EloquentSalesRepository implements SalesRepository
     /** @param list<InvoiceItemRecord> $items */
     public function createInvoice(InvoiceRecord $invoice, array $items): int
     {
+        $invoiceId = $this->createInvoiceHeader($invoice);
+        $this->createInvoiceItems($invoiceId, $items);
+
+        return $invoiceId;
+    }
+
+    public function createInvoiceHeader(InvoiceRecord $invoice): int
+    {
         $model = Invoice::query()->create([
             'branch_id' => $invoice->branchId,
             'customer_id' => $invoice->customerId,
@@ -27,7 +35,12 @@ final class EloquentSalesRepository implements SalesRepository
             'notes' => $invoice->notes,
         ]);
 
-        $model->items()->createMany(array_map(
+        return $model->getKey();
+    }
+
+    public function createInvoiceItems(int $invoiceId, array $items): void
+    {
+        Invoice::query()->findOrFail($invoiceId)->items()->createMany(array_map(
             static fn (InvoiceItemRecord $item): array => [
                 'product_variant_id' => $item->variantId,
                 'tax_id' => $item->taxId,
@@ -36,11 +49,10 @@ final class EloquentSalesRepository implements SalesRepository
                 'cost_price_at_sale' => $item->costPrice,
                 'tax_rate_at_sale' => $item->taxRate,
                 'line_total' => $item->lineTotal,
+                'cost_total_at_sale' => $item->costTotal,
             ],
             $items,
         ));
-
-        return $model->getKey();
     }
 
     /** @param list<CreditNoteItemRecord> $items */
@@ -63,6 +75,7 @@ final class EloquentSalesRepository implements SalesRepository
                 'cost_price_at_return' => $item->costPrice,
                 'tax_rate_at_return' => $item->taxRate,
                 'line_total' => $item->lineTotal,
+                'cost_total_at_return' => $item->costTotal,
             ],
             $items,
         ));
