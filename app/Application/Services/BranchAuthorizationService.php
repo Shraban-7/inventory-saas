@@ -6,6 +6,33 @@ use App\Infrastructure\Models\User;
 
 class BranchAuthorizationService
 {
+    public function allowsRoleOnBranch(User $user, string $roleName, int $branchId): bool
+    {
+        $roles = $user->roles()
+            ->where('name', $roleName)
+            ->get();
+
+        foreach ($roles as $role) {
+            $assignedBranchId = $role->pivot?->getAttribute('branch_id');
+
+            if ($assignedBranchId === null || (int) $assignedBranchId === $branchId) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public function hasTenantWideRole(User $user, string $roleName): bool
+    {
+        return $user->roles()
+            ->where('name', $roleName)
+            ->get()
+            ->contains(
+                static fn ($role): bool => $role->pivot?->getAttribute('branch_id') === null,
+            );
+    }
+
     /** @param list<int> $branchIds */
     public function allows(User $user, string $permission, array $branchIds): bool
     {

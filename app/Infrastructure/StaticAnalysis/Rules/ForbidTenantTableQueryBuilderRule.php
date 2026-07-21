@@ -60,6 +60,10 @@ class ForbidTenantTableQueryBuilderRule implements Rule
         'taxes',
         'journal_entries',
         'journal_entry_lines',
+        'accounting_periods',
+        'manual_journal_sequences',
+        'daily_account_balances',
+        'report_jobs',
         'audit_logs',
     ];
 

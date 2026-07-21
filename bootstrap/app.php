@@ -10,6 +10,11 @@ use App\Domain\Exceptions\InvalidJournalEntryException;
 use App\Domain\Exceptions\InvalidPurchaseOrderStateException;
 use App\Domain\Exceptions\InvalidPurchasingDataException;
 use App\Domain\Exceptions\InvalidSalesDataException;
+use App\Domain\Exceptions\LockedAccountingPeriodException;
+use App\Domain\Exceptions\ReportExpiredException;
+use App\Domain\Exceptions\ReportGenerationFailedException;
+use App\Domain\Exceptions\ReportNotReadyException;
+use App\Domain\Exceptions\TransactionRequiredException;
 use App\Domain\Exceptions\UnbalancedJournalEntryException;
 use App\Presentation\Middleware\EnforceIdempotencyKey;
 use App\Presentation\Middleware\SetTenantContext;
@@ -105,7 +110,57 @@ return Application::configure(basePath: dirname(__DIR__))
             'The requested resource was not found.',
         ));
 
+        $exceptions->render(function (TransactionRequiredException $exception, Request $request) {
+            if (! $request->is('api/v1/journal-entries*')) {
+                return null;
+            }
+
+            return ProblemDetails::response(
+                $request,
+                Response::HTTP_UNPROCESSABLE_ENTITY,
+                'Accounting transaction rejected',
+                app()->isProduction()
+                    ? 'The accounting transaction could not be processed.'
+                    : $exception->getMessage(),
+                [],
+                'urn:problem:accounting-transaction',
+            );
+        });
+
         $exceptions->render(function (DomainException $exception, Request $request) {
+            if ($exception instanceof ReportNotReadyException) {
+                return ProblemDetails::response(
+                    $request,
+                    Response::HTTP_CONFLICT,
+                    'Report not ready',
+                    $exception->getMessage(),
+                    [],
+                    'urn:problem:accounting-report-not-ready',
+                );
+            }
+
+            if ($exception instanceof ReportGenerationFailedException) {
+                return ProblemDetails::response(
+                    $request,
+                    Response::HTTP_CONFLICT,
+                    'Report generation failed',
+                    $exception->getMessage(),
+                    [],
+                    'urn:problem:accounting-report-failed',
+                );
+            }
+
+            if ($exception instanceof ReportExpiredException) {
+                return ProblemDetails::response(
+                    $request,
+                    Response::HTTP_GONE,
+                    'Report expired',
+                    $exception->getMessage(),
+                    [],
+                    'urn:problem:accounting-report-expired',
+                );
+            }
+
             if ($exception instanceof IdempotencyConflictException) {
                 return ProblemDetails::response(
                     $request,
@@ -136,6 +191,34 @@ return Application::configure(basePath: dirname(__DIR__))
                     $exception->getMessage(),
                     [],
                     'urn:problem:purchasing-transaction',
+                );
+            }
+
+            if ($exception instanceof LockedAccountingPeriodException) {
+                return ProblemDetails::response(
+                    $request,
+                    Response::HTTP_UNPROCESSABLE_ENTITY,
+                    'Accounting period locked',
+                    $exception->getMessage(),
+                    [],
+                    'urn:problem:accounting-period-locked',
+                );
+            }
+
+            $isAccountingRequest = $request->is('api/v1/journal-entries*')
+                || $request->is('api/v1/accounting-periods*');
+
+            if ($isAccountingRequest
+                && ($exception instanceof InvalidJournalEntryException || $exception instanceof UnbalancedJournalEntryException)) {
+                return ProblemDetails::response(
+                    $request,
+                    Response::HTTP_UNPROCESSABLE_ENTITY,
+                    'Accounting transaction rejected',
+                    app()->isProduction()
+                        ? 'The accounting transaction could not be processed.'
+                        : $exception->getMessage(),
+                    [],
+                    'urn:problem:accounting-transaction',
                 );
             }
 

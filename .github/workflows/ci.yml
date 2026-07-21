@@ -54,8 +54,15 @@ jobs:
       DB_DATABASE: inventory_saas_test
       DB_USERNAME: root
       DB_PASSWORD: root
+      DB_READ_CONNECTION: mysql
+      DB_READ_HOST: 127.0.0.1
+      DB_READ_PORT: 3306
+      DB_READ_DATABASE: inventory_saas_test
+      DB_READ_USERNAME: root
+      DB_READ_PASSWORD: root
       CACHE_STORE: redis
       REDIS_HOST: 127.0.0.1
+      QUEUE_AFTER_COMMIT: true
     steps:
       - uses: actions/checkout@v4
       - uses: shivammathur/setup-php@v2
@@ -66,5 +73,5 @@ jobs:
       - uses: ramsey/composer-install@v3
       - run: php artisan migrate:fresh --force
       - run: php artisan test --compact tests/Feature/TenancyTest.php tests/Feature/IdempotencyTest.php tests/Feature/InventoryTest.php tests/Feature/StockLedgerTest.php tests/Security/CrossTenantTest.php
-      - run: php artisan test --compact tests/Feature/CreateJournalEntryActionTest.php tests/Feature/CustomerTest.php tests/Feature/InvoiceSchemaTest.php tests/Feature/SalesTest.php tests/Feature/InvoiceApiTest.php tests/Feature/CreditNoteTest.php tests/Feature/MorphMapTest.php tests/Feature/PurchasingTest.php tests/Security/SalesCrossTenantTest.php tests/Security/SalesAuthorizationTest.php tests/Security/PurchasingSecurityTest.php
+      - run: php artisan test --compact tests/Feature/CreateJournalEntryActionTest.php tests/Feature/CustomerTest.php tests/Feature/InvoiceSchemaTest.php tests/Feature/SalesTest.php tests/Feature/InvoiceApiTest.php tests/Feature/CreditNoteTest.php tests/Feature/MorphMapTest.php tests/Feature/PurchasingTest.php tests/Feature/AccountingTest.php tests/Security/SalesCrossTenantTest.php tests/Security/SalesAuthorizationTest.php tests/Security/PurchasingSecurityTest.php tests/Security/AccountingSecurityTest.php
       - run: php artisan test --compact tests/MySql

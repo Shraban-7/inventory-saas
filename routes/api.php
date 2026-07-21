@@ -1,12 +1,16 @@
 <?php
 
+use App\Presentation\Controllers\AccountingPeriodController;
 use App\Presentation\Controllers\BillController;
+use App\Presentation\Controllers\ChartOfAccountController;
 use App\Presentation\Controllers\CreditNoteController;
 use App\Presentation\Controllers\CustomerController;
 use App\Presentation\Controllers\GoodsReceiptNoteController;
 use App\Presentation\Controllers\InvoiceController;
+use App\Presentation\Controllers\JournalEntryController;
 use App\Presentation\Controllers\ProductController;
 use App\Presentation\Controllers\PurchaseOrderController;
+use App\Presentation\Controllers\ReportController;
 use App\Presentation\Controllers\StockAdjustmentController;
 use App\Presentation\Controllers\StockTransferController;
 use App\Presentation\Controllers\SupplierController;
@@ -70,4 +74,27 @@ Route::prefix('v1')
             ->middleware(['can:purchase.create', 'idempotency']);
         Route::post('bills/{billId}/payments', [BillController::class, 'payment'])
             ->middleware(['can:purchase.create', 'idempotency']);
+
+        Route::get('chart-of-accounts', [ChartOfAccountController::class, 'index'])
+            ->middleware('can:report.view');
+
+        Route::get('journal-entries', [JournalEntryController::class, 'index'])
+            ->middleware('can:report.view');
+        Route::get('journal-entries/{journalEntryId}', [JournalEntryController::class, 'show'])
+            ->middleware('can:report.view');
+        Route::post('journal-entries', [JournalEntryController::class, 'store'])
+            ->middleware(['can:report.view', 'idempotency']);
+
+        Route::post('reports/profit-and-loss', [ReportController::class, 'storeProfitAndLoss'])
+            ->middleware(['can:report.view', 'idempotency'])
+            ->name('reports.profit-and-loss.store');
+        Route::get('reports/jobs/{reportJobId}', [ReportController::class, 'show'])
+            ->middleware('can:report.view')
+            ->name('reports.jobs.show');
+        Route::get('reports/jobs/{reportJobId}/result', [ReportController::class, 'result'])
+            ->middleware('can:report.view')
+            ->name('reports.jobs.result');
+
+        Route::put('accounting-periods/{accountingPeriodId}/lock', [AccountingPeriodController::class, 'lock'])
+            ->middleware('idempotency');
     });
