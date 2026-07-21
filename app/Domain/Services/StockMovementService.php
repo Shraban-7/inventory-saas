@@ -4,10 +4,13 @@ namespace App\Domain\Services;
 
 use App\Domain\Entities\Quantity;
 use App\Domain\Entities\StockBalance;
+use App\Domain\Entities\StockMovementData;
 use App\Domain\Entities\StockMovementType;
 use App\Domain\Exceptions\InsufficientStockException;
+use App\Domain\Repositories\BulkStockRepository;
 use App\Domain\Repositories\StockRepository;
 use InvalidArgumentException;
+use LogicException;
 
 final readonly class StockMovementService
 {
@@ -58,6 +61,74 @@ final readonly class StockMovementService
         $this->repository->appendMovement($variantId, $toBranchId, $quantity, null, StockMovementType::TransferIn, 'stock_transfer', $sourceId);
     }
 
+    /**
+     * @param  list<StockMovementData>  $movements
+     */
+    public function bulkDeduct(array $movements): void
+    {
+        $quantities = $this->validateBulkMovements($movements);
+        $balances = $this->bulkRepository()->lockLevelPairs(array_map(
+            static fn (StockMovementData $movement) => $movement->key(),
+            $movements,
+        ));
+
+        foreach ($movements as $movement) {
+            $key = $movement->key()->value();
+            $remaining = $balances[$key]->quantity->subtract($quantities[$key]);
+
+            if ($remaining->isNegative()) {
+                throw new InsufficientStockException;
+            }
+
+            $balances[$key]->quantity = $remaining;
+        }
+
+        foreach ($movements as $movement) {
+            $key = $movement->key()->value();
+            $this->repository->saveBalance($balances[$key]);
+            $this->repository->appendMovement(
+                $movement->variantId,
+                $movement->branchId,
+                Quantity::from('-'.$quantities[$key]->toDecimal()),
+                $movement->unitCost,
+                $movement->type,
+                $movement->sourceType,
+                $movement->sourceId,
+            );
+        }
+    }
+
+    /**
+     * @param  list<StockMovementData>  $movements
+     */
+    public function bulkAdd(array $movements): void
+    {
+        $quantities = $this->validateBulkMovements($movements);
+        $balances = $this->bulkRepository()->lockLevelPairs(array_map(
+            static fn (StockMovementData $movement) => $movement->key(),
+            $movements,
+        ));
+
+        foreach ($movements as $movement) {
+            $key = $movement->key()->value();
+            $balances[$key]->quantity = $balances[$key]->quantity->add($quantities[$key]);
+        }
+
+        foreach ($movements as $movement) {
+            $key = $movement->key()->value();
+            $this->repository->saveBalance($balances[$key]);
+            $this->repository->appendMovement(
+                $movement->variantId,
+                $movement->branchId,
+                $quantities[$key],
+                $movement->unitCost,
+                $movement->type,
+                $movement->sourceType,
+                $movement->sourceId,
+            );
+        }
+    }
+
     private function deductLocked(StockBalance $balance, Quantity $quantity, ?string $unitCost, StockMovementType $type, ?string $sourceType, ?int $sourceId): void
     {
         $remaining = $balance->quantity->subtract($quantity);
@@ -80,5 +151,35 @@ final readonly class StockMovementService
         }
 
         return $value;
+    }
+
+    /**
+     * @param  list<StockMovementData>  $movements
+     * @return array<string, Quantity>
+     */
+    private function validateBulkMovements(array $movements): array
+    {
+        $quantities = [];
+
+        foreach ($movements as $movement) {
+            $key = $movement->key()->value();
+
+            if (isset($quantities[$key])) {
+                throw new InvalidArgumentException("Duplicate stock movement pair {$key}.");
+            }
+
+            $quantities[$key] = $this->positiveQuantity($movement->quantity);
+        }
+
+        return $quantities;
+    }
+
+    private function bulkRepository(): BulkStockRepository
+    {
+        if (! $this->repository instanceof BulkStockRepository) {
+            throw new LogicException('The configured stock repository does not support bulk locking.');
+        }
+
+        return $this->repository;
     }
 }
