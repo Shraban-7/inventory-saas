@@ -5,8 +5,10 @@ namespace App\Infrastructure\Models;
 use App\Infrastructure\Shared\HasTenantScope;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\Pivot;
 use Spatie\Permission\Models\Role as SpatieRole;
 
+/** @property-read Pivot|null $pivot */
 class Role extends SpatieRole
 {
     use HasTenantScope;

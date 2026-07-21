@@ -33,7 +33,12 @@ class EnforceIdempotencyKey
         }
 
         $body = $request->isJson() ? $request->json()->all() : $request->request->all();
-        $payloadHash = hash('sha256', $key.$this->canonicalJson->encode($body));
+        $payloadHash = hash('sha256', implode('|', [
+            $key,
+            $request->getMethod(),
+            '/'.$request->path(),
+            $this->canonicalJson->encode($body),
+        ]));
         $lock = Cache::lock('idempotency:'.current_tenant_id().":{$key}", 30);
 
         try {
