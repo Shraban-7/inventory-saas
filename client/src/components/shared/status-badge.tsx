@@ -53,29 +53,36 @@ export function StatusBadge({ status, customLabel, className }: StatusBadgeProps
       break;
     case "confirmed":
     case "approved":
+    case "issued":
       variant = "info";
-      label = customLabel || (normalized === "approved" ? "Approved" : "Confirmed");
+      label =
+        customLabel ||
+        (normalized === "approved" ? "Approved" : normalized === "issued" ? "Issued" : "Confirmed");
       break;
     case "completed":
     case "paid":
+    case "received":
       variant = "success";
-      label = customLabel || (normalized === "paid" ? "Paid" : "Completed");
+      label =
+        customLabel ||
+        (normalized === "paid" ? "Paid" : normalized === "received" ? "Received" : "Completed");
       break;
     case "partially_paid":
-    case "partial":
+    case "partially_received":
       variant = "info";
-      label = customLabel || "Partially Paid";
-      break;
-    case "unpaid":
-      variant = "warning";
-      label = customLabel || "Unpaid";
+      label =
+        customLabel ||
+        (normalized === "partially_received" ? "Partially Received" : "Partially Paid");
       break;
     case "cancelled":
     case "void":
+    case "voided":
     case "failed":
     case "expired":
       variant = "destructive";
-      label = customLabel || (normalized === "void" ? "Voided" : normalized.toUpperCase());
+      label =
+        customLabel ||
+        (normalized === "void" || normalized === "voided" ? "Voided" : normalized.replace(/_/g, " "));
       break;
     case "stock_adjustment_in":
       variant = "success";
