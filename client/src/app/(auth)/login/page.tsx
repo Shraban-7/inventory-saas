@@ -1,8 +1,9 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Package, ShieldAlert, UserCheck } from "lucide-react";
+import { Package, ShieldAlert, UserCheck, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -37,18 +38,28 @@ export default function LoginPage() {
     <main className="flex min-h-screen items-center justify-center bg-slate-100 p-4 dark:bg-slate-950">
       <div className="w-full max-w-md space-y-6">
         
-        {/* Brand Header */}
-        <div className="flex flex-col items-center text-center space-y-2">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-teal-600 text-white shadow-md">
+        {/* Back to Home Link */}
+        <div className="flex justify-start">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-teal-600 dark:text-slate-400 dark:hover:text-teal-400 transition-colors"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> Back to Home
+          </Link>
+        </div>
+
+        {/* Brand Header (Clickable Logo Redirecting to Landing Page /) */}
+        <Link href="/" className="flex flex-col items-center text-center space-y-2 group cursor-pointer">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-teal-600 text-white shadow-md group-hover:scale-105 transition-transform">
             <Package className="h-7 w-7" />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-            Inventory SaaS Portal
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">
+            OmniInventory SaaS Portal
           </h1>
           <p className="text-xs text-slate-500 dark:text-slate-400">
             Enterprise Multi-Tenant REST API v1 Management Console
           </p>
-        </div>
+        </Link>
 
         {/* Login Card */}
         <Card className="border-slate-200 shadow-lg dark:border-slate-800">
