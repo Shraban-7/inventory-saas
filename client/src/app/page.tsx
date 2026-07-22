@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +19,7 @@ import { Select } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { EmptyState } from "@/components/shared/empty-state";
-import { Package, Layers, Info, AlertTriangle, Plus } from "lucide-react";
+import { Package, Layers, Info, AlertTriangle, Plus, LayoutDashboard, LogIn } from "lucide-react";
 import { formatCurrency, formatQuantity } from "@/lib/utils";
 
 export default function DesignSystemShowcase() {
@@ -35,19 +36,23 @@ export default function DesignSystemShowcase() {
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-3">
               <Package className="h-8 w-8 text-teal-600 dark:text-teal-400" />
-              Inventory SaaS Design System
+              Inventory SaaS Portal & Design System
             </h1>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-              Phase 01 UI Component Primitives & Semantic Token Gallery (Teal / Slate Theme)
+              Enterprise Multi-Tenant Portal (Teal / Slate Theme, App Shell Chrome & Auth Ready)
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <Button onClick={() => toast.success("Toast notification system active!")}>
-              Trigger Success Toast
-            </Button>
-            <Button variant="outline" onClick={() => setIsSheetOpen(true)}>
-              Open Drawer Sheet
-            </Button>
+            <Link href="/dashboard">
+              <Button className="gap-2">
+                <LayoutDashboard className="h-4 w-4" /> Open Application Shell
+              </Button>
+            </Link>
+            <Link href="/login">
+              <Button variant="outline" className="gap-2">
+                <LogIn className="h-4 w-4" /> Sign In
+              </Button>
+            </Link>
           </div>
         </div>
 
