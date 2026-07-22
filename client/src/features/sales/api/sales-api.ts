@@ -106,10 +106,11 @@ export function useCreateCustomerMutation() {
   });
 }
 
-export function useInvoicesQuery(params: ListInvoicesParams) {
+export function useInvoicesQuery(params: ListInvoicesParams, enabled = true) {
   return useQuery({
     queryKey: SALES_QUERY_KEYS.invoices(params),
     queryFn: () => fetchInvoices(params),
+    enabled,
   });
 }
 

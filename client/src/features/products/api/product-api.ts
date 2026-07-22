@@ -76,10 +76,11 @@ export async function fetchProductStock(productId: number): Promise<Product> {
 
 // React Query Hooks
 
-export function useProductsQuery(params: ListProductsParams) {
+export function useProductsQuery(params: ListProductsParams, enabled = true) {
   return useQuery({
     queryKey: PRODUCT_QUERY_KEYS.list(params),
     queryFn: () => fetchProducts(params),
+    enabled,
   });
 }
 

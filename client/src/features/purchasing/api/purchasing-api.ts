@@ -190,10 +190,11 @@ export function useUpdateSupplierMutation() {
   });
 }
 
-export function usePurchaseOrdersQuery(params: ListPurchaseOrdersParams) {
+export function usePurchaseOrdersQuery(params: ListPurchaseOrdersParams, enabled = true) {
   return useQuery({
     queryKey: PURCHASING_QUERY_KEYS.orders(params),
     queryFn: () => fetchPurchaseOrders(params),
+    enabled,
   });
 }
 
