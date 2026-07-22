@@ -20,28 +20,40 @@ const SYSTEM_DEV_BRANCHES: Branch[] = [
   { id: 2, tenant_id: 1, name: "Downtown Retail Store (Branch #2)", code: "RET-02" },
 ];
 
+const DEFAULT_ADMIN_PERMISSIONS = [
+  "invoice.view",
+  "invoice.create",
+  "invoice.void",
+  "product.manage",
+  "stock.adjust",
+  "stock.transfer",
+  "purchase.create",
+  "purchase.receive",
+  "report.view",
+];
+
+// Helper to inspect initial token from storage
+const getStoredToken = () => {
+  if (typeof window !== "undefined") {
+    return localStorage.getItem("inventory_auth_token") || "dev-stub-token";
+  }
+  return "dev-stub-token";
+};
+
+const hasInitialSession = typeof window !== "undefined" ? !!localStorage.getItem("inventory_auth_token") : true;
+
 export const useAuthStore = create<AuthState>((set, get) => ({
-  user: {
+  user: hasInitialSession ? {
     id: 1,
     name: "System Administrator",
     email: "admin@inventory-saas.com",
     tenant_id: 1,
-  },
-  roles: ["Admin"],
-  permissions: [
-    "invoice.view",
-    "invoice.create",
-    "invoice.void",
-    "product.manage",
-    "stock.adjust",
-    "stock.transfer",
-    "purchase.create",
-    "purchase.receive",
-    "report.view",
-  ],
-  branches: SYSTEM_DEV_BRANCHES,
-  token: "dev-stub-token",
-  isAuthenticated: true,
+  } : null,
+  roles: hasInitialSession ? ["Admin"] : [],
+  permissions: hasInitialSession ? DEFAULT_ADMIN_PERMISSIONS : [],
+  branches: hasInitialSession ? SYSTEM_DEV_BRANCHES : [],
+  token: getStoredToken(),
+  isAuthenticated: hasInitialSession,
   isLoading: false,
   loginError: null,
 
@@ -52,8 +64,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const response = await apiClient.post("/login", { email, password });
       const data = response.data;
       
-      if (data.token) {
-        localStorage.setItem("inventory_auth_token", data.token);
+      const token = data.token || "session-token-" + Date.now();
+      if (typeof window !== "undefined") {
+        localStorage.setItem("inventory_auth_token", token);
       }
 
       const branches = data.branches && data.branches.length > 0 ? data.branches : SYSTEM_DEV_BRANCHES;
@@ -63,7 +76,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         roles: data.roles || [],
         permissions: data.permissions || [],
         branches,
-        token: data.token || "session-token",
+        token,
         isAuthenticated: true,
         isLoading: false,
       });
@@ -82,24 +95,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   loginAsStubProfile: (roleName: RoleName) => {
-    // Permissions mirror SeedSystemRoles::ROLE_PERMISSIONS (backend authority).
     let permissions: string[] = [];
     let name = "Dev User";
 
     switch (roleName) {
       case "Admin":
         name = "Alex Admin";
-        permissions = [
-          "invoice.create",
-          "invoice.void",
-          "invoice.view",
-          "report.view",
-          "stock.adjust",
-          "stock.transfer",
-          "product.manage",
-          "purchase.create",
-          "purchase.receive",
-        ];
+        permissions = DEFAULT_ADMIN_PERMISSIONS;
         break;
       case "Manager":
         name = "Morgan Manager";
@@ -128,12 +130,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         break;
     }
 
+    const token = "dev-stub-token-" + roleName.toLowerCase();
+    if (typeof window !== "undefined") {
+      localStorage.setItem("inventory_auth_token", token);
+    }
+
     set({
       user: { id: 2, name, email: `${roleName.toLowerCase().replace(/\s+/g, "")}@saas.com`, tenant_id: 1 },
       roles: [roleName],
       permissions,
       branches: SYSTEM_DEV_BRANCHES,
-      token: "dev-stub-token",
+      token,
       isAuthenticated: true,
       loginError: null,
     });
@@ -142,7 +149,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   logout: () => {
-    localStorage.removeItem("inventory_auth_token");
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("inventory_auth_token");
+    }
     set({
       user: null,
       roles: [],

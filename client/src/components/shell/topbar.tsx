@@ -2,14 +2,17 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Package, Search, ShieldCheck, LogOut, ChevronDown, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { useShellStore } from "@/lib/stores/shell-store";
 import { useAuthStore } from "@/lib/stores/auth-store";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 
 export function Topbar() {
+  const router = useRouter();
   const { activeBranchId, setActiveBranchId, toggleCommandPalette, toggleSidebar } = useShellStore();
   const { user, branches, logout, roles } = useAuthStore();
   const [showProfileMenu, setShowProfileMenu] = React.useState(false);
@@ -18,6 +21,13 @@ export function Topbar() {
     label: b.name,
     value: b.id,
   }));
+
+  const handleSignOut = () => {
+    setShowProfileMenu(false);
+    logout();
+    toast.info("Signed out of Tenant Workspace.");
+    router.push("/login");
+  };
 
   return (
     <header className="sticky top-0 z-40 flex h-14 w-full items-center justify-between border-b border-slate-200 bg-white/95 px-4 backdrop-blur-xs dark:border-slate-800 dark:bg-slate-950/95">
@@ -89,8 +99,8 @@ export function Topbar() {
           {showProfileMenu && (
             <div className="absolute right-0 mt-2 w-56 rounded-md border border-slate-200 bg-white p-2 shadow-lg dark:border-slate-800 dark:bg-slate-950 z-50 animate-in fade-in-50">
               <div className="border-b border-slate-100 pb-2 px-2 dark:border-slate-800">
-                <div className="font-semibold text-slate-900 dark:text-slate-100">{user?.name}</div>
-                <div className="text-xs text-slate-500 dark:text-slate-400">{user?.email}</div>
+                <div className="font-semibold text-slate-900 dark:text-slate-100">{user?.name || "Dev User"}</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">{user?.email || "user@saas.com"}</div>
                 <div className="mt-1">
                   <Badge variant="secondary" className="text-[10px]">
                     Role: {roles[0] || "User"}
@@ -100,10 +110,7 @@ export function Topbar() {
 
               <div className="pt-2">
                 <button
-                  onClick={() => {
-                    setShowProfileMenu(false);
-                    logout();
-                  }}
+                  onClick={handleSignOut}
                   className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-950/50 cursor-pointer"
                 >
                   <LogOut className="h-3.5 w-3.5" />
