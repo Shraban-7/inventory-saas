@@ -1,0 +1,263 @@
+# Local operations stack for Laravel + ProxySQL + MySQL writer/replica.
+# DEV-ONLY defaults below are clearly marked — override via environment / .env.
+# Do not commit production secrets.
+
+name: inventory-saas
+
+x-app-build: &app-build
+  context: .
+  dockerfile: Dockerfile
+
+x-app-env: &app-env
+  APP_NAME: ${APP_NAME:-InventorySaaS}
+  APP_ENV: ${APP_ENV:-local}
+  APP_KEY: ${APP_KEY:-base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=}
+  APP_DEBUG: ${APP_DEBUG:-true}
+  APP_URL: ${APP_URL:-http://localhost:8080}
+  LOG_CHANNEL: ${LOG_CHANNEL:-stderr}
+  LOG_LEVEL: ${LOG_LEVEL:-debug}
+  DB_CONNECTION: mysql
+  # Writes go through ProxySQL (writer hostgroup 10).
+  DB_HOST: proxysql
+  DB_PORT: "6033"
+  DB_WRITE_HOST: proxysql
+  DB_WRITE_PORT: "6033"
+  # Reporting/historical reads target the physical replica (not a global Eloquent read split).
+  DB_READ_HOST: mysql-replica
+  DB_READ_PORT: "3306"
+  # Stack credentials use MYSQL_* so a host .env DB_USERNAME=root cannot break ProxySQL.
+  DB_DATABASE: ${MYSQL_DATABASE:-inventory_saas}
+  DB_USERNAME: ${MYSQL_USER:-inventory}
+  DB_PASSWORD: ${MYSQL_PASSWORD:-inventory_dev_only_change_me}
+  DB_READ_CONNECTION: mysql
+  DB_READ_DATABASE: ${MYSQL_DATABASE:-inventory_saas}
+  DB_READ_USERNAME: ${MYSQL_USER:-inventory}
+  DB_READ_PASSWORD: ${MYSQL_PASSWORD:-inventory_dev_only_change_me}
+  DB_MAX_CONNECTIONS: ${DB_MAX_CONNECTIONS:-50}
+  CACHE_STORE: redis
+  QUEUE_CONNECTION: redis
+  SESSION_DRIVER: redis
+  REDIS_CLIENT: phpredis
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  REDIS_PASSWORD: ${REDIS_PASSWORD:-null}
+  SKIP_CONFIG_CACHE: ${SKIP_CONFIG_CACHE:-1}
+
+x-dev-mysql-writer: &dev-mysql-writer
+  # DEV-ONLY credentials — override via MYSQL_* environment variables.
+  MYSQL_DATABASE: ${MYSQL_DATABASE:-inventory_saas}
+  MYSQL_USER: ${MYSQL_USER:-inventory}
+  MYSQL_PASSWORD: ${MYSQL_PASSWORD:-inventory_dev_only_change_me}
+  MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_dev_only_change_me}
+  MYSQL_REPLICATION_USER: ${MYSQL_REPLICATION_USER:-repl}
+  MYSQL_REPLICATION_PASSWORD: ${MYSQL_REPLICATION_PASSWORD:-repl_dev_only_change_me}
+
+x-dev-mysql-replica: &dev-mysql-replica
+  # Root only: schema/users arrive solely via writer replication (no duplicate init GTIDs).
+  MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_dev_only_change_me}
+
+services:
+  mysql-writer:
+    image: mysql:8.4
+    command:
+      - --server-id=1
+      - --log-bin=mysql-bin
+      - --binlog-format=ROW
+      - --gtid-mode=ON
+      - --enforce-gtid-consistency=ON
+    environment:
+      <<: *dev-mysql-writer
+    volumes:
+      - mysql-writer-data:/var/lib/mysql
+      - ./docker/mysql/writer.cnf:/etc/mysql/conf.d/writer.cnf:ro
+      - ./docker/mysql/writer-init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "${MYSQL_WRITER_PUBLISH_HOST:-127.0.0.1}:${MYSQL_WRITER_PUBLISH_PORT:-3307}:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-root_dev_only_change_me}", "--silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    networks:
+      - inventory
+
+  mysql-replica:
+    image: mysql:8.4
+    command:
+      - --server-id=2
+      - --log-bin=mysql-bin
+      - --binlog-format=ROW
+      - --gtid-mode=ON
+      - --enforce-gtid-consistency=ON
+      # Writable during first official entrypoint init; bootstrap persists read-only later.
+      - --skip-replica-start=ON
+    environment:
+      <<: *dev-mysql-replica
+    volumes:
+      - mysql-replica-data:/var/lib/mysql
+      - ./docker/mysql/replica.cnf:/etc/mysql/conf.d/replica.cnf:ro
+    ports:
+      - "${MYSQL_REPLICA_PUBLISH_HOST:-127.0.0.1}:${MYSQL_REPLICA_PUBLISH_PORT:-3308}:3306"
+    depends_on:
+      mysql-writer:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-root_dev_only_change_me}", "--silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    networks:
+      - inventory
+
+  replica-bootstrap:
+    image: mysql:8.4
+    environment:
+      <<: *dev-mysql-writer
+      MYSQL_WRITER_HOST: mysql-writer
+      MYSQL_REPLICA_HOST: mysql-replica
+    volumes:
+      - ./docker/mysql/replica-bootstrap.sh:/bootstrap.sh:ro
+    entrypoint: ["/bin/bash", "/bootstrap.sh"]
+    depends_on:
+      mysql-writer:
+        condition: service_healthy
+      mysql-replica:
+        condition: service_healthy
+    restart: "on-failure"
+    networks:
+      - inventory
+
+  proxysql:
+    build:
+      context: ./docker/proxysql
+      dockerfile: Dockerfile
+    environment:
+      DB_USERNAME: ${MYSQL_USER:-inventory}
+      DB_PASSWORD: ${MYSQL_PASSWORD:-inventory_dev_only_change_me}
+      DB_MAX_CONNECTIONS: ${DB_MAX_CONNECTIONS:-50}
+      PROXYSQL_MONITOR_USER: ${PROXYSQL_MONITOR_USER:-monitor}
+      PROXYSQL_MONITOR_PASSWORD: ${PROXYSQL_MONITOR_PASSWORD:-monitor_dev_only_change_me}
+      PROXYSQL_TEMPLATE: /etc/proxysql/proxysql.cnf
+      PROXYSQL_CONFIG: /etc/proxysql.cnf
+    volumes:
+      - proxysql-data:/var/lib/proxysql
+    ports:
+      - "${PROXYSQL_SQL_PUBLISH_HOST:-127.0.0.1}:${PROXYSQL_SQL_PUBLISH_PORT:-6033}:6033"
+      - "${PROXYSQL_ADMIN_PUBLISH_HOST:-127.0.0.1}:${PROXYSQL_ADMIN_PUBLISH_PORT:-6032}:6032"
+    depends_on:
+      mysql-writer:
+        condition: service_healthy
+      mysql-replica:
+        condition: service_healthy
+      replica-bootstrap:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mysql -h127.0.0.1 -P6032 -uadmin -padmin_dev_only_change_me -e \"SELECT 1\" || exit 1",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 15s
+    networks:
+      - inventory
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    ports:
+      - "${REDIS_PUBLISH_HOST:-127.0.0.1}:${REDIS_PUBLISH_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - inventory
+
+  migrate:
+    build: *app-build
+    command: ["migrate"]
+    environment:
+      <<: *app-env
+    depends_on:
+      proxysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      replica-bootstrap:
+        condition: service_completed_successfully
+    restart: "on-failure"
+    networks:
+      - inventory
+
+  app:
+    build: *app-build
+    command: ["web"]
+    environment:
+      <<: *app-env
+    ports:
+      - "${APP_PUBLISH_PORT:-8080}:8080"
+    depends_on:
+      proxysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    networks:
+      - inventory
+
+  horizon:
+    build: *app-build
+    command: ["horizon"]
+    environment:
+      <<: *app-env
+    depends_on:
+      proxysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - inventory
+    restart: unless-stopped
+
+  scheduler:
+    build: *app-build
+    command: ["scheduler"]
+    environment:
+      <<: *app-env
+    depends_on:
+      proxysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - inventory
+    restart: unless-stopped
+
+networks:
+  inventory:
+    driver: bridge
+
+volumes:
+  mysql-writer-data:
+  mysql-replica-data:
+  proxysql-data:
+  redis-data:

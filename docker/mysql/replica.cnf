@@ -1,0 +1,14 @@
+[mysqld]
+server-id=2
+log-bin=mysql-bin
+binlog-format=ROW
+gtid-mode=ON
+enforce-gtid-consistency=ON
+# Leave writable for official entrypoint first-time init. replica-bootstrap
+# enables and SET PERSIST read_only/super_read_only after replication is healthy.
+relay_log=relay-bin
+relay_log_recovery=ON
+skip_replica_start=ON
+default_authentication_plugin=caching_sha2_password
+character-set-server=utf8mb4
+collation-server=utf8mb4_unicode_ci

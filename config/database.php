@@ -3,6 +3,29 @@
 use Illuminate\Support\Str;
 use Pdo\Mysql;
 
+/**
+ * PDO options for MySQL-family connections.
+ *
+ * ATTR_PERSISTENT must remain false for ProxySQL safety. SSL CA is merged only
+ * when pdo_mysql is present; empty CA paths are dropped without removing false.
+ *
+ * @return array<int, mixed>
+ */
+$mysqlPdoOptions = static function (): array {
+    $options = [
+        PDO::ATTR_PERSISTENT => false,
+        PDO::ATTR_TIMEOUT => 5,
+    ];
+
+    if (! extension_loaded('pdo_mysql')) {
+        return $options;
+    }
+
+    return $options + array_filter([
+        Mysql::ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
+    ], static fn (mixed $value): bool => $value !== null && $value !== '');
+};
+
 return [
 
     /*
@@ -21,12 +44,24 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Pooling hint consumed by ProxySQL bootstrap (mysql_users.max_connections)
+    |--------------------------------------------------------------------------
+    */
+    'max_connections' => (int) env('DB_MAX_CONNECTIONS', 50),
+
+    /*
+    |--------------------------------------------------------------------------
     | Database Connections
     |--------------------------------------------------------------------------
     |
     | Below are all of the database connections defined for your application.
     | An example configuration is provided for each database system which
     | is supported by Laravel. You're free to add / remove connections.
+    |
+    | Ordinary Eloquent traffic uses the mysql connection (DB_WRITE_HOST).
+    | Historical/report reads use the explicit reporting connection
+    | (DB_READ_HOST with write-host fallback). Do not globally split mysql
+    | into Laravel sticky read/write hosts.
     |
     */
 
@@ -47,8 +82,8 @@ return [
         'mysql' => [
             'driver' => 'mysql',
             'url' => env('DB_URL'),
-            'host' => env('DB_HOST', '127.0.0.1'),
-            'port' => env('DB_PORT', '3306'),
+            'host' => env('DB_WRITE_HOST', env('DB_HOST', '127.0.0.1')),
+            'port' => env('DB_WRITE_PORT', env('DB_PORT', '3306')),
             'database' => env('DB_DATABASE', 'laravel'),
             'username' => env('DB_USERNAME', 'root'),
             'password' => env('DB_PASSWORD', ''),
@@ -59,16 +94,14 @@ return [
             'prefix_indexes' => true,
             'strict' => true,
             'engine' => null,
-            'options' => extension_loaded('pdo_mysql') ? array_filter([
-                Mysql::ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
-            ]) : [],
+            'options' => $mysqlPdoOptions(),
         ],
 
         'mariadb' => [
             'driver' => 'mariadb',
             'url' => env('DB_URL'),
-            'host' => env('DB_HOST', '127.0.0.1'),
-            'port' => env('DB_PORT', '3306'),
+            'host' => env('DB_WRITE_HOST', env('DB_HOST', '127.0.0.1')),
+            'port' => env('DB_WRITE_PORT', env('DB_PORT', '3306')),
             'database' => env('DB_DATABASE', 'laravel'),
             'username' => env('DB_USERNAME', 'root'),
             'password' => env('DB_PASSWORD', ''),
@@ -79,16 +112,14 @@ return [
             'prefix_indexes' => true,
             'strict' => true,
             'engine' => null,
-            'options' => extension_loaded('pdo_mysql') ? array_filter([
-                Mysql::ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
-            ]) : [],
+            'options' => $mysqlPdoOptions(),
         ],
 
         'reporting' => [
             'driver' => env('DB_READ_CONNECTION', env('DB_CONNECTION', 'mysql')),
             'url' => env('DB_READ_URL', env('DB_URL')),
-            'host' => env('DB_READ_HOST', env('DB_HOST', '127.0.0.1')),
-            'port' => env('DB_READ_PORT', env('DB_PORT', '3306')),
+            'host' => env('DB_READ_HOST', env('DB_WRITE_HOST', env('DB_HOST', '127.0.0.1'))),
+            'port' => env('DB_READ_PORT', env('DB_WRITE_PORT', env('DB_PORT', '3306'))),
             'database' => env('DB_READ_DATABASE', env('DB_DATABASE', 'laravel')),
             'username' => env('DB_READ_USERNAME', env('DB_USERNAME', 'root')),
             'password' => env('DB_READ_PASSWORD', env('DB_PASSWORD', '')),
@@ -99,9 +130,7 @@ return [
             'prefix_indexes' => true,
             'strict' => true,
             'engine' => null,
-            'options' => extension_loaded('pdo_mysql') ? array_filter([
-                Mysql::ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
-            ]) : [],
+            'options' => $mysqlPdoOptions(),
         ],
 
         'pgsql' => [
@@ -157,7 +186,7 @@ return [
     | Redis Databases
     |--------------------------------------------------------------------------
     |
-    | Redis is an open source, fast, and advanced key-value store that also
+    | Redis is an open source, fast, and powerful key-value store that also
     | provides a richer body of commands than a typical key-value system
     | such as Memcached. You may define your connection settings here.
     |
@@ -180,6 +209,8 @@ return [
             'password' => env('REDIS_PASSWORD'),
             'port' => env('REDIS_PORT', '6379'),
             'database' => env('REDIS_DB', '0'),
+            'timeout' => (float) env('REDIS_CONNECT_TIMEOUT', 2),
+            'read_timeout' => (float) env('REDIS_READ_TIMEOUT', 2),
             'max_retries' => env('REDIS_MAX_RETRIES', 3),
             'backoff_algorithm' => env('REDIS_BACKOFF_ALGORITHM', 'decorrelated_jitter'),
             'backoff_base' => env('REDIS_BACKOFF_BASE', 100),
@@ -193,6 +224,8 @@ return [
             'password' => env('REDIS_PASSWORD'),
             'port' => env('REDIS_PORT', '6379'),
             'database' => env('REDIS_CACHE_DB', '1'),
+            'timeout' => (float) env('REDIS_CONNECT_TIMEOUT', 2),
+            'read_timeout' => (float) env('REDIS_READ_TIMEOUT', 2),
             'max_retries' => env('REDIS_MAX_RETRIES', 3),
             'backoff_algorithm' => env('REDIS_BACKOFF_ALGORITHM', 'decorrelated_jitter'),
             'backoff_base' => env('REDIS_BACKOFF_BASE', 100),

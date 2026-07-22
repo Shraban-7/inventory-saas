@@ -1,0 +1,12 @@
+[mysqld]
+server-id=1
+log-bin=mysql-bin
+binlog-format=ROW
+gtid-mode=ON
+enforce-gtid-consistency=ON
+sync_binlog=1
+innodb_flush_log_at_trx_commit=1
+binlog_expire_logs_seconds=604800
+default_authentication_plugin=caching_sha2_password
+character-set-server=utf8mb4
+collation-server=utf8mb4_unicode_ci

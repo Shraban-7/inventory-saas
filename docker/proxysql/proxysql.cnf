@@ -1,0 +1,96 @@
+datadir="/var/lib/proxysql"
+
+admin_variables=
+{
+    admin_credentials="admin:admin_dev_only_change_me"
+    mysql_ifaces="0.0.0.0:6032"
+    refresh_interval=2000
+}
+
+mysql_variables=
+{
+    threads=4
+    max_connections=2048
+    default_query_delay=0
+    default_query_timeout=36000000
+    have_compress=true
+    poll_timeout=2000
+    interfaces="0.0.0.0:6033"
+    default_schema="inventory_saas"
+    server_version="8.4.0"
+    connect_timeout_server=3000
+    monitor_username="__PROXYSQL_MONITOR_USER__"
+    monitor_password="__PROXYSQL_MONITOR_PASSWORD__"
+    monitor_history=600000
+    monitor_connect_interval=2000
+    monitor_ping_interval=2000
+    monitor_read_only_interval=1500
+    monitor_read_only_timeout=500
+    ping_interval_server_msec=10000
+    ping_timeout_server=200
+    commands_stats=true
+    sessions_sort=true
+}
+
+mysql_servers =
+(
+    {
+        address="mysql-writer"
+        port=3306
+        hostgroup=10
+        max_connections=200
+        weight=1000
+        compression=0
+        max_replication_lag=0
+        use_ssl=0
+        max_latency_ms=0
+        comment="canonical-writer"
+    },
+    {
+        address="mysql-replica"
+        port=3306
+        hostgroup=20
+        max_connections=200
+        weight=1000
+        compression=0
+        max_replication_lag=10
+        use_ssl=0
+        max_latency_ms=0
+        comment="canonical-replica-reader"
+    }
+)
+
+mysql_users =
+(
+    {
+        username="__DB_USERNAME__"
+        password="__DB_PASSWORD__"
+        default_hostgroup=10
+        transaction_persistent=1
+        active=1
+        max_connections=__DB_MAX_CONNECTIONS__
+        comment="app-through-proxysql"
+    }
+)
+
+# Explicit reporting connection targets the physical replica.
+# Do not globally rewrite ordinary SELECT traffic away from the writer hostgroup.
+mysql_query_rules =
+(
+    {
+        rule_id=1
+        active=1
+        match_digest="^SELECT @@read_only"
+        destination_hostgroup=20
+        apply=1
+        comment="monitor-read-only"
+    },
+    {
+        rule_id=100
+        active=1
+        match_pattern=".*"
+        destination_hostgroup=10
+        apply=1
+        comment="default-writer-no-global-read-split"
+    }
+)
