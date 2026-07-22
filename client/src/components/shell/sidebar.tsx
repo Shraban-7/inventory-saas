@@ -34,6 +34,7 @@ interface NavItem {
   href: string;
   icon: React.ComponentType<{ className?: string }>;
   permission?: string;
+  role?: "Admin" | "Manager" | "Cashier" | "Accountant";
 }
 
 interface NavGroup {
@@ -80,7 +81,7 @@ const NAVIGATION_GROUPS: NavGroup[] = [
     items: [
       { title: "Chart of Accounts", href: "/accounting/coa", icon: BookOpen, permission: "report.view" },
       { title: "Journal Entries", href: "/accounting/journals", icon: ClipboardList, permission: "report.view" },
-      { title: "Period Locks", href: "/accounting/periods", icon: Lock, permission: "report.view" },
+      { title: "Period Locks", href: "/accounting/periods", icon: Lock, role: "Admin" },
     ],
   },
   {
@@ -125,7 +126,7 @@ export function Sidebar() {
                 const Icon = item.icon;
 
                 return (
-                  <PermissionGuard key={item.href} permission={item.permission}>
+                  <PermissionGuard key={item.href} permission={item.permission} role={item.role}>
                     <Link
                       href={item.href}
                       className={cn(

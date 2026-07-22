@@ -28,6 +28,7 @@ const COMMAND_ROUTES: RouteJump[] = [
   { title: "Vendor Bills & Payments", category: "Purchasing", href: "/purchasing/bills", icon: ShoppingCart },
   { title: "Chart of Accounts Tree", category: "Accounting", href: "/accounting/coa", icon: BookOpen },
   { title: "General Ledger Journals", category: "Accounting", href: "/accounting/journals", icon: BookOpen },
+  { title: "Post Manual Journal", category: "Accounting", href: "/accounting/journals/new", icon: BookOpen },
   { title: "Accounting Period Locking", category: "Accounting", href: "/accounting/periods", icon: BookOpen },
   { title: "Profit & Loss Job Generator", category: "Reports", href: "/reports/profit-and-loss", icon: PieChart },
   { title: "Webhooks Subscriptions", category: "Admin", href: "/webhooks", icon: Settings },
