@@ -584,7 +584,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/products?search=keyboard&category_id=1&per_page=50",
+              "raw": "{{baseUrl}}/api/v1/products?category_id=1&per_page=50&filter[low_stock]=false",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -595,20 +595,21 @@
               ],
               "query": [
                 {
-                  "key": "search",
-                  "value": "keyboard"
-                },
-                {
                   "key": "category_id",
                   "value": "1"
                 },
                 {
                   "key": "per_page",
                   "value": "50"
+                },
+                {
+                  "key": "filter[low_stock]",
+                  "value": "false",
+                  "description": "Optional. ListProductsRequest has no `search` param."
                 }
               ]
             },
-            "description": "List products with search and category filtering."
+            "description": "List products. Supported: category_id, per_page, filter[low_stock], filter[branch_id]. No search param."
           },
           "response": []
         },
@@ -785,7 +786,7 @@
             "description": "Adjust stock level in or out for a variant.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"variant_id\": 1,\n  \"branch_id\": 1,\n  \"quantity_delta\": \"10.0000\",\n  \"reason\": \"Stock count correction following physical audit\",\n  \"type\": \"stock_adjustment_in\"\n}",
+              "raw": "{\n  \"variant_id\": 1,\n  \"branch_id\": 1,\n  \"quantity_delta\": \"10.0000\",\n  \"reason\": \"Stock count correction following physical audit\",\n  \"type\": \"STOCK_ADJUSTMENT_IN\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1384,7 +1385,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/bills?status=unpaid&supplier_id=1&per_page=50",
+              "raw": "{{baseUrl}}/api/v1/bills?status=approved&supplier_id=1&per_page=50",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -1396,7 +1397,8 @@
               "query": [
                 {
                   "key": "status",
-                  "value": "unpaid"
+                  "value": "approved",
+                  "description": "BillStatus enum: draft|approved|partially_paid|paid|cancelled (no unpaid)"
                 },
                 {
                   "key": "supplier_id",

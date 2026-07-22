@@ -130,7 +130,7 @@ function GoodsReceiptNotesContent() {
               }))
             : [{ variant_id: 1, quantity: 1, unit_cost: 1 }],
       });
-      setIsModalOpen(true);
+      setTimeout(() => setIsModalOpen(true), 0);
     }
   }, [searchParams, activeBranchId, branches, suppliers, reset, today]);
 

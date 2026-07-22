@@ -76,10 +76,12 @@ export function CommandPalette() {
 
   React.useEffect(() => {
     if (commandPaletteOpen) {
-      setActiveIndex(0);
-      setTimeout(() => inputRef.current?.focus(), 0);
+      setTimeout(() => {
+        setActiveIndex(0);
+        inputRef.current?.focus();
+      }, 0);
     } else {
-      setSearch("");
+      setTimeout(() => setSearch(""), 0);
     }
   }, [commandPaletteOpen]);
 
@@ -93,7 +95,7 @@ export function CommandPalette() {
   });
 
   React.useEffect(() => {
-    setActiveIndex(0);
+    setTimeout(() => setActiveIndex(0), 0);
   }, [search]);
 
   if (!commandPaletteOpen) return null;

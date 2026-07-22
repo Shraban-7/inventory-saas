@@ -1,58 +1,206 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Inventory SaaS — Production-Grade Multi-Tenant ERP System
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+[![Laravel](https://img.shields.io/badge/Backend-Laravel_11-FF2D20?style=for-the-badge&logo=laravel&logoColor=white)](https://laravel.com)
+[![Next.js](https://img.shields.io/badge/Frontend-Next.js_15-000000?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org)
+[![TypeScript](https://img.shields.io/badge/Language-TypeScript_5-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![Tailwind CSS](https://img.shields.io/badge/Styling-Tailwind_CSS-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
+[![License](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](LICENSE)
 
-## About Laravel
+An enterprise-grade, multi-tenant Inventory, Sales, Purchasing, and General Ledger (GL) SaaS ERP application. Engineered with a **Laravel Clean Architecture / DDD API Backend** and a **Next.js 15 App Router Frontend**, providing real-time multi-branch inventory tracking, double-entry financial accounting, and append-only audit ledgers.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+---
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## 🌟 Key Features & Modules
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+### 🏢 Multi-Tenant & Multi-Branch Scoping
+- **Tenant Isolation**: Global middleware & DB scopes (`tenant_id`) preventing cross-tenant data leakage.
+- **Branch Context Switching**: Operational scoping per physical location/warehouse with global or branch-specific permissions.
 
-## Learning Laravel
+### 🛡️ Role-Based Access Control (RBAC)
+Granular security matrix across 4 pre-seeded user roles:
+- **Admin**: Full system access, invoice voiding (`invoice.void`), credit note approvals, and accounting period locks.
+- **Manager**: Inventory management, product catalog editing, PO/GRN processing, sales invoice creation.
+- **Cashier**: Front-desk invoice issuance and customer payment receipt collection.
+- **Accountant**: Financial reports, Chart of Accounts, manual double-entry journal posting (`accounting.post_manual_journal`), and period locking.
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+### 📦 Products & Catalog Management
+- Multi-variant tracking (SKUs, barcodes, cost price, sale price, reorder points).
+- Support for FIFO (First-In, First-Out) costing valuation methods.
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+### 🏭 Multi-Branch Inventory Operations
+- **Stock Overview**: Real-time on-hand inventory levels across branches with low-stock alerts (`filter[low_stock]=true`).
+- **Manual Adjustments**: Append-only stock movements (In/Out) with audit reason codes.
+- **Inter-Branch Transfers**: Atomic stock transfers between authorized branches.
+- **Bulk CSV Imports**: Asynchronous background file processor for catalog and stock updates with line-by-line error inspection drawer.
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
+### 💼 Sales & Accounts Receivable (AR)
+- **Customers Directory**: Client account management and branch associations.
+- **Sales Invoices**: Cursor-paginated invoices with real-time status transitions (`draft`, `issued`, `paid`, `partially_paid`, `voided`).
+- **Payment Receipts**: Multi-method receipt recording (`cash`, `bank_transfer`, `card`, `cheque`, `other`).
+- **Credit Notes**: Sales returns and credit note issuance with formal approval workflows.
 
-## Agentic Development
+### 🛒 Purchasing & Accounts Payable (AP)
+- **Vendor Suppliers**: Supplier profile management and contact representatives.
+- **Purchase Orders**: Order lifecycle tracking (`draft`, `confirmed`, `partially_received`, `received`, `cancelled`).
+- **Goods Receipt Notes (GRN)**: Physical shipment intake at warehouse level with automated FIFO cost batching.
+- **Vendor Bills & Payments**: Accounts payable bill approvals (`draft`, `approved`, `partially_paid`, `paid`) and outgoing payment recording.
 
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+### ⚖️ Accounting & General Ledger (GL)
+- **Chart of Accounts (CoA)**: Double-entry account structure (Assets, Liabilities, Equity, Revenue, Expenses).
+- **Manual Journals**: Double-entry journal entry posting with balanced debit/credit validation and source reference linking.
+- **Period Locking**: Accounting period locking to protect historical financial statements from retroactive alterations.
 
-```bash
-composer require laravel/boost --dev
+### 📊 Asynchronous Financial Reporting
+- **Profit & Loss (P&L)**: Background job calculation engine for generating income statements across custom date ranges with real-time polling and report downloads.
 
-php artisan boost:install
+### 🔌 Webhooks & Webhook Subscriptions
+- Event subscription management (`invoice.created`, `stock.low`, `payment.received`, etc.).
+- HMAC SHA-256 signature verification headers (`X-Signature`), manual test pinging, and execution delivery logs.
+
+---
+
+## 🛠️ Technology Stack
+
+### Backend (REST API)
+- **Framework**: Laravel 11 (PHP 8.2+)
+- **Architecture**: Domain-Driven Design (DDD) / Clean Architecture
+- **Authentication**: Laravel Sanctum (Token-Based Auth)
+- **Validation**: Dedicated FormRequest classes
+- **Error Standards**: RFC 7807 Problem Details (`application/problem+json`)
+- **API Security**: `Idempotency-Key` header enforcement on state-modifying requests
+
+### Frontend (Client SPA/SSR)
+- **Framework**: Next.js 15 (App Router, Server & Client Components)
+- **Language**: TypeScript (Strict Mode)
+- **State & Data Fetching**: TanStack React Query v5 (Optimistic UI & Cache Invalidation)
+- **Forms & Validation**: React Hook Form + Zod validation schemas
+- **Styling & UI**: Vanilla CSS + Tailwind CSS, Lucide Icons, Sonner toasts
+- **UI Design**: Modern glassmorphism, dark mode support, accessible data tables
+
+---
+
+## 📁 Repository Structure
+
+```
+inventory-saas/
+├── app/                        # Laravel Clean Architecture Backend
+│   ├── Application/            # Use cases, DTOs, Services
+│   ├── Domain/                 # Entities, Enums, Value Objects
+│   ├── Infrastructure/         # Models, Migrations, Repositories
+│   └── Presentation/           # Controllers, FormRequests, API Resources
+├── client/                     # Next.js 15 Frontend Workspace
+│   ├── docs/                   # Frontend Specs, Architecture & UX Rules
+│   ├── tasks/                  # Implementation Checklists (Phases 00–10)
+│   ├── src/
+│   │   ├── app/                # Next.js App Router Pages & Shell Layouts
+│   │   ├── components/         # Design System Primitives & UI Shell
+│   │   ├── features/           # Domain API Hooks & Zod Schemas
+│   │   ├── lib/                # API Client, Auth Store & Utility Helpers
+│   │   └── types/              # TypeScript Domain Contracts
+├── api-collection.json         # Complete Postman v2.1 Collection
+└── README.md                   # Project Documentation
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+---
 
-## Contributing
+## 🚀 Getting Started
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+### Prerequisites
+- PHP 8.2+ with `sqlite3` or `pdo_mysql` extensions
+- Composer 2.x
+- Node.js 18+ & npm 10+
 
-## Code of Conduct
+---
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+### 1. Backend Setup
 
-## Security Vulnerabilities
+```bash
+# Clone repository
+git clone https://github.com/Shraban-7/inventory-saas.git
+cd inventory-saas
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+# Install PHP dependencies
+composer install
 
-## License
+# Environment setup
+cp .env.example .env
+php artisan key:generate
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+# Run database migrations and seed default tenant/roles
+php artisan migrate:fresh --seed
+
+# Start Laravel backend server (Runs on http://localhost:8000)
+php artisan serve
+```
+
+---
+
+### 2. Frontend Setup
+
+```bash
+# Navigate to Next.js client workspace
+cd client
+
+# Install Node dependencies
+npm install
+
+# Start Next.js development server (Runs on http://localhost:3000)
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+---
+
+## 🧪 Quality Assurance & Building
+
+The frontend includes zero-error quality gates for TypeScript type checking, linting, and production builds:
+
+```bash
+cd client
+
+# Type Check
+npm run typecheck
+
+# Lint Codebase
+npm run lint
+
+# Production Build Verification
+npm run build
+```
+
+---
+
+## 📡 API Idempotency Protocol
+
+To prevent accidental double-billing or duplicate stock movements during network retries, the following endpoints require an `Idempotency-Key` header (UUID v4):
+
+| Module | Endpoint | Required Header |
+| :--- | :--- | :--- |
+| **Sales** | `POST /api/v1/invoices` | `Idempotency-Key: <uuid>` |
+| **Sales** | `POST /api/v1/invoices/{id}/receipts` | `Idempotency-Key: <uuid>` |
+| **Sales** | `PUT /api/v1/invoices/{id}/void` | `Idempotency-Key: <uuid>` |
+| **Sales** | `POST /api/v1/credit-notes` | `Idempotency-Key: <uuid>` |
+| **Sales** | `PUT /api/v1/credit-notes/{id}/approve` | `Idempotency-Key: <uuid>` |
+| **Inventory** | `POST /api/v1/stock-adjustments` | `Idempotency-Key: <uuid>` |
+| **Inventory** | `POST /api/v1/stock-transfers` | `Idempotency-Key: <uuid>` |
+| **Purchasing** | `POST /api/v1/purchase-orders` | `Idempotency-Key: <uuid>` |
+| **Purchasing** | `PUT /api/v1/purchase-orders/{id}/confirm` | `Idempotency-Key: <uuid>` |
+| **Purchasing** | `PUT /api/v1/purchase-orders/{id}/cancel` | `Idempotency-Key: <uuid>` |
+| **Purchasing** | `POST /api/v1/goods-receipt-notes` | `Idempotency-Key: <uuid>` |
+| **Purchasing** | `POST /api/v1/bills` | `Idempotency-Key: <uuid>` |
+| **Purchasing** | `PUT /api/v1/bills/{id}/approve` | `Idempotency-Key: <uuid>` |
+| **Purchasing** | `POST /api/v1/bills/{id}/payments` | `Idempotency-Key: <uuid>` |
+| **Accounting**| `POST /api/v1/manual-journals` | `Idempotency-Key: <uuid>` |
+
+---
+
+## 📄 Postman Collection
+
+Import `api-collection.json` located at the root of the project into Postman to explore all 47 REST API endpoints, pre-configured environment variables, and sample request/response payloads.
+
+---
+
+## 📜 License
+
+This project is open-sourced under the [MIT License](LICENSE).

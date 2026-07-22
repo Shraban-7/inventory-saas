@@ -31,7 +31,7 @@ export default function ReportJobsPage() {
   const [recent, setRecent] = React.useState<string[]>([]);
 
   React.useEffect(() => {
-    setRecent(loadRecentReportJobIds());
+    setTimeout(() => setRecent(loadRecentReportJobIds()), 0);
   }, [activeId]);
 
   const { data: job, isLoading, isError, error } = useReportJobQuery(activeId);

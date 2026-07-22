@@ -10,9 +10,10 @@ export type EntityStatus =
   | "cancelled"
   | "void"
   | "paid"
-  | "unpaid"
   | "partially_paid"
-  | "stock_adjustment_in"
+  | "STOCK_ADJUSTMENT_IN"
+  | "STOCK_ADJUSTMENT_OUT"
+  | "stock_adjustment_in" // legacy alias — prefer STOCK_ADJUSTMENT_*
   | "stock_adjustment_out"
   | "low_stock"
   | "out_of_stock"

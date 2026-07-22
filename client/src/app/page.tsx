@@ -75,11 +75,10 @@ export default function DesignSystemShowcase() {
             <StatusBadge status="completed" />
             <StatusBadge status="paid" />
             <StatusBadge status="partially_paid" />
-            <StatusBadge status="unpaid" />
             <StatusBadge status="void" />
             <StatusBadge status="cancelled" />
-            <StatusBadge status="stock_adjustment_in" />
-            <StatusBadge status="stock_adjustment_out" />
+            <StatusBadge status="STOCK_ADJUSTMENT_IN" />
+            <StatusBadge status="STOCK_ADJUSTMENT_OUT" />
             <StatusBadge status="low_stock" />
             <StatusBadge status="out_of_stock" />
             <StatusBadge status="queued" />
