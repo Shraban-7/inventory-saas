@@ -82,6 +82,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   loginAsStubProfile: (roleName: RoleName) => {
+    // Permissions mirror SeedSystemRoles::ROLE_PERMISSIONS (backend authority).
     let permissions: string[] = [];
     let name = "Dev User";
 
@@ -89,32 +90,41 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       case "Admin":
         name = "Alex Admin";
         permissions = [
-          "invoice.view",
           "invoice.create",
           "invoice.void",
-          "product.manage",
+          "invoice.view",
+          "report.view",
           "stock.adjust",
           "stock.transfer",
+          "product.manage",
           "purchase.create",
           "purchase.receive",
-          "report.view",
         ];
         break;
+      case "Manager":
+        name = "Morgan Manager";
+        permissions = [
+          "invoice.create",
+          "invoice.view",
+          "report.view",
+          "stock.adjust",
+          "stock.transfer",
+          "product.manage",
+          "purchase.create",
+          "purchase.receive",
+        ];
+        break;
+      case "Cashier":
+        name = "Casey Cashier";
+        permissions = ["invoice.create", "invoice.view"];
+        break;
       case "Accountant":
-        name = "Morgan Accountant";
-        permissions = ["report.view", "invoice.view"];
+        name = "Avery Accountant";
+        permissions = ["invoice.view", "report.view"];
         break;
-      case "Inventory Manager":
-        name = "Irene Inventory";
-        permissions = ["product.manage", "stock.adjust", "stock.transfer", "purchase.receive"];
-        break;
-      case "Sales Staff":
-        name = "Sam Sales";
-        permissions = ["invoice.view", "invoice.create", "invoice.void"];
-        break;
-      case "Purchase Staff":
-        name = "Peter Purchase";
-        permissions = ["purchase.create", "purchase.receive"];
+      default:
+        name = "Dev User";
+        permissions = [];
         break;
     }
 

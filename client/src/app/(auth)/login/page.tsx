@@ -108,7 +108,23 @@ export default function LoginPage() {
                     size="sm"
                     onClick={() => handleStubLogin("Admin")}
                   >
-                    Admin Role
+                    Admin
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleStubLogin("Manager")}
+                  >
+                    Manager
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleStubLogin("Cashier")}
+                  >
+                    Cashier
                   </Button>
                   <Button
                     type="button"
@@ -117,22 +133,6 @@ export default function LoginPage() {
                     onClick={() => handleStubLogin("Accountant")}
                   >
                     Accountant
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleStubLogin("Inventory Manager")}
-                  >
-                    Inventory Manager
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleStubLogin("Sales Staff")}
-                  >
-                    Sales Staff
                   </Button>
                 </div>
               </div>

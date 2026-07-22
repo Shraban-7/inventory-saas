@@ -94,8 +94,8 @@ const NAVIGATION_GROUPS: NavGroup[] = [
   {
     groupTitle: "System Admin",
     items: [
-      { title: "Webhooks", href: "/webhooks", icon: Webhook },
-      { title: "Settings & Audit", href: "/settings", icon: Settings },
+      { title: "Webhooks", href: "/webhooks", icon: Webhook, role: "Admin" },
+      { title: "Settings", href: "/settings", icon: Settings, role: "Admin" },
     ],
   },
 ];
