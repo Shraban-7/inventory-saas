@@ -11,6 +11,11 @@ class PruneIdempotencyRequestsJob implements ShouldQueue
 {
     use Queueable;
 
+    public function __construct()
+    {
+        $this->onQueue('notifications');
+    }
+
     public function handle(): void
     {
         Tenant::query()->select('id')->chunkById(100, function ($tenants): void {
