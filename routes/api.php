@@ -1,12 +1,14 @@
 <?php
 
 use App\Presentation\Controllers\AccountingPeriodController;
+use App\Presentation\Controllers\AuthController;
 use App\Presentation\Controllers\BillController;
 use App\Presentation\Controllers\BulkImportController;
 use App\Presentation\Controllers\ChartOfAccountController;
 use App\Presentation\Controllers\CreditNoteController;
 use App\Presentation\Controllers\CustomerController;
 use App\Presentation\Controllers\GoodsReceiptNoteController;
+use App\Presentation\Controllers\HealthController;
 use App\Presentation\Controllers\InvoiceController;
 use App\Presentation\Controllers\JournalEntryController;
 use App\Presentation\Controllers\ProductController;
@@ -18,9 +20,21 @@ use App\Presentation\Controllers\SupplierController;
 use App\Presentation\Controllers\WebhookController;
 use Illuminate\Support\Facades\Route;
 
-Route::prefix('v1')
-    ->middleware(['auth', 'tenant'])
-    ->group(function (): void {
+// Public Health & System Readiness Probes
+Route::get('/healthz', [HealthController::class, 'live']);
+Route::get('/readyz', [HealthController::class, 'ready']);
+
+// API v1 Endpoints
+Route::prefix('v1')->group(function (): void {
+    
+    // Public Authentication Endpoint
+    Route::post('login', [AuthController::class, 'login']);
+
+    // Protected Tenant API Endpoints
+    Route::middleware(['auth', 'tenant'])->group(function (): void {
+        Route::get('me', [AuthController::class, 'me']);
+        Route::get('branches', [AuthController::class, 'branches']);
+
         Route::get('customers', [CustomerController::class, 'index'])->middleware('can:invoice.view');
         Route::post('customers', [CustomerController::class, 'store'])->middleware('can:invoice.create');
         Route::get('customers/{customerId}', [CustomerController::class, 'show'])->middleware('can:invoice.view');
@@ -113,3 +127,4 @@ Route::prefix('v1')
         Route::put('accounting-periods/{accountingPeriodId}/lock', [AccountingPeriodController::class, 'lock'])
             ->middleware('idempotency');
     });
+});
