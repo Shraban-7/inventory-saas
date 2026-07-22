@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+/*
+  Tailwind v4 gates hover behind @media (hover: hover).
+  On many Windows hybrid/touch devices the browser reports no hover capability,
+  so button/nav hover styles never apply. Restore classic :hover behavior.
+*/
+@custom-variant hover (&:hover);
+
 @layer base {
   :root {
     --background: 0 0% 100%;
