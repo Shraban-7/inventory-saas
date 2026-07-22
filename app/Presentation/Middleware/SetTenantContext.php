@@ -7,6 +7,7 @@ use App\Infrastructure\Models\User;
 use App\Infrastructure\Persistence\EloquentJournalHistoryRepository;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -23,6 +24,8 @@ class SetTenantContext
         abort_unless($tenant instanceof Tenant, Response::HTTP_UNAUTHORIZED);
 
         app()->instance('current_tenant', $tenant);
+        Context::add('tenant_id', $tenant->getKey());
+        Context::add('user_id', $user->getAuthIdentifier());
 
         $usesMySqlSession = in_array(DB::connection()->getDriverName(), ['mysql', 'mariadb'], true);
 
@@ -33,16 +36,19 @@ class SetTenantContext
         try {
             return $next($request);
         } finally {
-            if (app()->bound(EloquentJournalHistoryRepository::REPORTING_CONTEXT_BOUND)) {
-                DB::connection('reporting')->statement('SET @current_tenant_id = NULL');
-                app()->forgetInstance(EloquentJournalHistoryRepository::REPORTING_CONTEXT_BOUND);
-            }
+            try {
+                if (app()->bound(EloquentJournalHistoryRepository::REPORTING_CONTEXT_BOUND)) {
+                    DB::connection('reporting')->statement('SET @current_tenant_id = NULL');
+                    app()->forgetInstance(EloquentJournalHistoryRepository::REPORTING_CONTEXT_BOUND);
+                }
 
-            if ($usesMySqlSession) {
-                DB::statement('SET @current_tenant_id = NULL');
+                if ($usesMySqlSession) {
+                    DB::statement('SET @current_tenant_id = NULL');
+                }
+            } finally {
+                app()->forgetInstance('current_tenant');
+                Context::forget(['tenant_id', 'user_id']);
             }
-
-            app()->forgetInstance('current_tenant');
         }
     }
 }

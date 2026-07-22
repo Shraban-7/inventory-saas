@@ -3,22 +3,44 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
+    inputs:
+      compose_integration:
+        description: 'Run optional Docker Compose replication + k6 load profile'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
 
 jobs:
   quality:
     runs-on: ubuntu-latest
+    env:
+      APP_ENV: testing
+      APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
     steps:
       - uses: actions/checkout@v4
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
-          extensions: mbstring, pdo_sqlite
+          extensions: mbstring, pdo_sqlite, pcntl, posix, intl, redis
           coverage: none
       - uses: ramsey/composer-install@v3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
       - run: php artisan test --compact --testsuite=Security
       - run: php artisan test --compact
       - run: composer run analyse
       - run: vendor/bin/pint --test
+      - run: php artisan config:cache
+      - run: php artisan route:cache
+      - run: php artisan event:cache
       - run: composer audit
 
   mysql-redis-integration:
@@ -54,12 +76,14 @@ jobs:
       DB_DATABASE: inventory_saas_test
       DB_USERNAME: root
       DB_PASSWORD: root
+      DB_WRITE_HOST: 127.0.0.1
       DB_READ_CONNECTION: mysql
       DB_READ_HOST: 127.0.0.1
       DB_READ_PORT: 3306
       DB_READ_DATABASE: inventory_saas_test
       DB_READ_USERNAME: root
       DB_READ_PASSWORD: root
+      DB_MAX_CONNECTIONS: 50
       CACHE_STORE: redis
       REDIS_HOST: 127.0.0.1
       QUEUE_AFTER_COMMIT: true
@@ -68,10 +92,73 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
-          extensions: mbstring, pdo_mysql, redis
+          extensions: mbstring, pdo_mysql, redis, pcntl, posix, intl
           coverage: none
       - uses: ramsey/composer-install@v3
       - run: php artisan migrate:fresh --force
       - run: php artisan test --compact tests/Feature/TenancyTest.php tests/Feature/IdempotencyTest.php tests/Feature/InventoryTest.php tests/Feature/StockLedgerTest.php tests/Security/CrossTenantTest.php
       - run: php artisan test --compact tests/Feature/CreateJournalEntryActionTest.php tests/Feature/CustomerTest.php tests/Feature/InvoiceSchemaTest.php tests/Feature/SalesTest.php tests/Feature/InvoiceApiTest.php tests/Feature/CreditNoteTest.php tests/Feature/MorphMapTest.php tests/Feature/PurchasingTest.php tests/Feature/AccountingTest.php tests/Security/SalesCrossTenantTest.php tests/Security/SalesAuthorizationTest.php tests/Security/PurchasingSecurityTest.php tests/Security/AccountingSecurityTest.php
       - run: php artisan test --compact tests/MySql
+
+  docker-image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build application image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          tags: inventory-saas:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  compose-load-integration:
+    if: github.event_name == 'workflow_dispatch' && inputs.compose_integration == 'true'
+    runs-on: ubuntu-latest
+    needs: [docker-image]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start compose stack with Horizon
+        run: |
+          docker compose up -d --build mysql-writer mysql-replica replica-bootstrap proxysql redis migrate app horizon
+          docker compose ps
+      - name: Wait for /readyz 200 (DB via ProxySQL, Redis, four Horizon supervisors)
+        run: |
+          for i in $(seq 1 90); do
+            code=$(curl -sS -o /tmp/readyz.json -w '%{http_code}' http://127.0.0.1:8080/readyz || echo 000)
+            if [ "$code" = "200" ] \
+              && grep -q '"status":"ok"' /tmp/readyz.json \
+              && grep -q '"database":"ok"' /tmp/readyz.json \
+              && grep -q '"redis":"ok"' /tmp/readyz.json \
+              && grep -q '"queue:transactions":"ok"' /tmp/readyz.json \
+              && grep -q '"queue:reports":"ok"' /tmp/readyz.json \
+              && grep -q '"queue:imports":"ok"' /tmp/readyz.json \
+              && grep -q '"queue:notifications":"ok"' /tmp/readyz.json; then
+              echo "readyz healthy:"
+              cat /tmp/readyz.json
+              exit 0
+            fi
+            echo "waiting for readyz heartbeats (attempt ${i}, http=${code})"
+            sleep 2
+          done
+          echo "readyz did not become healthy within bounded wait"
+          cat /tmp/readyz.json || true
+          docker compose logs --no-color app horizon proxysql redis mysql-writer
+          exit 1
+      - name: Reporting replica integration
+        run: bash scripts/tests/integration/reporting-replica.sh
+      - name: Install k6
+        run: |
+          sudo gpg -k
+          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install -y k6
+      - name: ProxySQL load profile against /readyz
+        run: k6 run -e BASE_URL=http://127.0.0.1:8080 -e K6_TARGET_PATH=/readyz tests/load/proxysql-k6.js
+      - name: Tear down
+        if: always()
+        run: docker compose down -v

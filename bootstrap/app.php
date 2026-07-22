@@ -16,6 +16,8 @@ use App\Domain\Exceptions\ReportGenerationFailedException;
 use App\Domain\Exceptions\ReportNotReadyException;
 use App\Domain\Exceptions\TransactionRequiredException;
 use App\Domain\Exceptions\UnbalancedJournalEntryException;
+use App\Presentation\Controllers\HealthController;
+use App\Presentation\Middleware\AssignRequestId;
 use App\Presentation\Middleware\EnforceIdempotencyKey;
 use App\Presentation\Middleware\SetTenantContext;
 use App\Presentation\ProblemDetails;
@@ -26,6 +28,7 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\Response;
@@ -36,9 +39,22 @@ return Application::configure(basePath: dirname(__DIR__))
         web: __DIR__.'/../routes/web.php',
         api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
-        health: '/up',
+        then: function (): void {
+            Route::get('/healthz', [HealthController::class, 'live'])
+                ->name('healthz');
+            Route::get('/up', [HealthController::class, 'live'])
+                ->name('healthz.alias');
+            Route::get('/readyz', [HealthController::class, 'ready'])
+                ->name('readyz');
+        },
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->prepend(AssignRequestId::class);
+        $middleware->preventRequestsDuringMaintenance([
+            '/healthz',
+            '/readyz',
+            '/up',
+        ]);
         $middleware->alias([
             'idempotency' => EnforceIdempotencyKey::class,
             'tenant' => SetTenantContext::class,

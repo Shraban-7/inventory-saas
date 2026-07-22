@@ -1,9 +1,13 @@
 <?php
 
+use App\Infrastructure\Logging\ConfigureObservabilityLogger;
 use Monolog\Handler\NullHandler;
 use Monolog\Handler\StreamHandler;
 use Monolog\Handler\SyslogUdpHandler;
 use Monolog\Processor\PsrLogMessageProcessor;
+
+$isLocal = env('APP_ENV', 'production') === 'local';
+$defaultLevel = env('LOG_LEVEL', $isLocal ? 'debug' : (env('APP_ENV') === 'production' ? 'warning' : 'debug'));
 
 return [
 
@@ -18,7 +22,7 @@ return [
     |
     */
 
-    'default' => env('LOG_CHANNEL', 'stack'),
+    'default' => env('LOG_CHANNEL', $isLocal ? 'stack' : 'stderr'),
 
     /*
     |--------------------------------------------------------------------------
@@ -26,7 +30,7 @@ return [
     |--------------------------------------------------------------------------
     |
     | This option controls the log channel that should be used to log warnings
-    | regarding deprecated PHP and library features. This allows you to get
+    | regarding deprecated PHP and Laravel features. This allows you to get
     | your application ready for upcoming major versions of dependencies.
     |
     */
@@ -61,16 +65,18 @@ return [
         'single' => [
             'driver' => 'single',
             'path' => storage_path('logs/laravel.log'),
-            'level' => env('LOG_LEVEL', 'debug'),
+            'level' => $defaultLevel,
             'replace_placeholders' => true,
+            'tap' => [ConfigureObservabilityLogger::class],
         ],
 
         'daily' => [
             'driver' => 'daily',
             'path' => storage_path('logs/laravel.log'),
-            'level' => env('LOG_LEVEL', 'debug'),
+            'level' => $defaultLevel,
             'days' => env('LOG_DAILY_DAYS', 14),
             'replace_placeholders' => true,
+            'tap' => [ConfigureObservabilityLogger::class],
         ],
 
         'slack' => [
@@ -96,25 +102,26 @@ return [
 
         'stderr' => [
             'driver' => 'monolog',
-            'level' => env('LOG_LEVEL', 'debug'),
+            'level' => $defaultLevel,
             'handler' => StreamHandler::class,
             'handler_with' => [
                 'stream' => 'php://stderr',
             ],
             'formatter' => env('LOG_STDERR_FORMATTER'),
+            'tap' => [ConfigureObservabilityLogger::class],
             'processors' => [PsrLogMessageProcessor::class],
         ],
 
         'syslog' => [
             'driver' => 'syslog',
-            'level' => env('LOG_LEVEL', 'debug'),
+            'level' => $defaultLevel,
             'facility' => env('LOG_SYSLOG_FACILITY', LOG_USER),
             'replace_placeholders' => true,
         ],
 
         'errorlog' => [
             'driver' => 'errorlog',
-            'level' => env('LOG_LEVEL', 'debug'),
+            'level' => $defaultLevel,
             'replace_placeholders' => true,
         ],
 

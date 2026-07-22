@@ -2,6 +2,7 @@
 
 use App\Presentation\Controllers\AccountingPeriodController;
 use App\Presentation\Controllers\BillController;
+use App\Presentation\Controllers\BulkImportController;
 use App\Presentation\Controllers\ChartOfAccountController;
 use App\Presentation\Controllers\CreditNoteController;
 use App\Presentation\Controllers\CustomerController;
@@ -14,6 +15,7 @@ use App\Presentation\Controllers\ReportController;
 use App\Presentation\Controllers\StockAdjustmentController;
 use App\Presentation\Controllers\StockTransferController;
 use App\Presentation\Controllers\SupplierController;
+use App\Presentation\Controllers\WebhookController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')
@@ -49,6 +51,19 @@ Route::prefix('v1')
             ->middleware(['can:stock.adjust', 'idempotency']);
         Route::post('stock-transfers', [StockTransferController::class, 'store'])
             ->middleware(['can:stock.transfer', 'idempotency']);
+
+        Route::post('bulk/products', [BulkImportController::class, 'products'])
+            ->middleware(['can:product.manage', 'throttle:bulk-imports']);
+        Route::post('bulk/stock-adjustments', [BulkImportController::class, 'stockAdjustments'])
+            ->middleware(['can:stock.adjust', 'throttle:bulk-imports']);
+        Route::get('bulk/imports/{bulkImportId}', [BulkImportController::class, 'show'])
+            ->name('bulk.imports.show');
+        Route::get('bulk/imports/{bulkImportId}/errors', [BulkImportController::class, 'errors'])
+            ->name('bulk.imports.errors');
+
+        Route::get('webhooks', [WebhookController::class, 'index']);
+        Route::post('webhooks', [WebhookController::class, 'store']);
+        Route::delete('webhooks/{webhookEndpointId}', [WebhookController::class, 'destroy']);
 
         Route::get('suppliers', [SupplierController::class, 'index'])->middleware('can:purchase.create');
         Route::post('suppliers', [SupplierController::class, 'store'])->middleware('can:purchase.create');

@@ -1,6 +1,8 @@
 <?php
 
+use App\Application\Jobs\DispatchArchiveExportsJob;
 use App\Application\Jobs\DispatchJournalRollupsJob;
+use App\Application\Jobs\DispatchPendingWebhookDeliveriesJob;
 use App\Application\Jobs\PruneExpiredReportJobsJob;
 use App\Application\Jobs\PruneIdempotencyRequestsJob;
 use App\Application\Jobs\ReconcileStockLevelsJob;
@@ -14,10 +16,12 @@ Artisan::command('inspire', function () {
 
 Schedule::job(new PruneIdempotencyRequestsJob)
     ->daily()
+    ->onOneServer()
     ->withoutOverlapping();
 
 Schedule::job(new ReconcileStockLevelsJob)
     ->dailyAt('02:00')
+    ->onOneServer()
     ->withoutOverlapping();
 
 Schedule::job(new DispatchJournalRollupsJob, 'reports')
@@ -27,5 +31,15 @@ Schedule::job(new DispatchJournalRollupsJob, 'reports')
 
 Schedule::job(new PruneExpiredReportJobsJob, 'reports')
     ->daily()
+    ->onOneServer()
+    ->withoutOverlapping();
+
+Schedule::job(new DispatchPendingWebhookDeliveriesJob, 'transactions')
+    ->everyMinute()
+    ->onOneServer()
+    ->withoutOverlapping();
+
+Schedule::job(new DispatchArchiveExportsJob, 'reports')
+    ->dailyAt('03:00')
     ->onOneServer()
     ->withoutOverlapping();
