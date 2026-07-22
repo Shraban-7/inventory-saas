@@ -5,6 +5,7 @@ namespace App\Domain\Repositories;
 use App\Domain\Entities\Quantity;
 use App\Domain\Entities\StockBalance;
 use App\Domain\Entities\StockMovementType;
+use App\Domain\Entities\VariantReorderProfile;
 
 interface StockRepository
 {
@@ -24,5 +25,11 @@ interface StockRepository
         StockMovementType $type,
         ?string $sourceType,
         ?int $sourceId,
-    ): void;
+    ): int;
+
+    /**
+     * @param  list<int>  $variantIds
+     * @return array<int, VariantReorderProfile>
+     */
+    public function reorderProfiles(array $variantIds): array;
 }

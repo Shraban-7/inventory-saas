@@ -2,12 +2,15 @@
 
 namespace App\Domain\Services;
 
+use App\Domain\Contracts\DeferredDomainEventPublisher;
 use App\Domain\Entities\LotBalance;
 use App\Domain\Entities\Quantity;
 use App\Domain\Entities\StockDeductionResult;
 use App\Domain\Entities\StockLevelKey;
 use App\Domain\Entities\StockMovementData;
 use App\Domain\Entities\StockMovementType;
+use App\Domain\Entities\VariantReorderProfile;
+use App\Domain\Events\StockLow;
 use App\Domain\Exceptions\InsufficientStockException;
 use App\Domain\Repositories\BulkStockRepository;
 use App\Domain\Repositories\InventoryLotRepository;
@@ -22,6 +25,7 @@ final readonly class StockMovementService
         private StockRepository $repository,
         private ?InventoryLotRepository $lots = null,
         ?FifoCostCalculator $fifo = null,
+        private ?DeferredDomainEventPublisher $events = null,
     ) {
         $this->fifo = $fifo ?? new FifoCostCalculator;
     }
@@ -40,7 +44,8 @@ final readonly class StockMovementService
         if ($this->lots === null) {
             $quantity = $this->positiveQuantity($qty);
             $balance = $this->repository->lockLevels($variantId, [$branchId])[$branchId];
-            $remaining = $balance->quantity->subtract($quantity);
+            $previous = $balance->quantity;
+            $remaining = $previous->subtract($quantity);
 
             if ($remaining->isNegative()) {
                 throw new InsufficientStockException;
@@ -48,7 +53,8 @@ final readonly class StockMovementService
 
             $balance->quantity = $remaining;
             $this->repository->saveBalance($balance);
-            $this->repository->appendMovement($variantId, $branchId, Quantity::from('-'.$quantity->toDecimal()), $unitCost, $type, $sourceType, $sourceId);
+            $movementId = $this->repository->appendMovement($variantId, $branchId, Quantity::from('-'.$quantity->toDecimal()), $unitCost, $type, $sourceType, $sourceId);
+            $this->publishCrossingAlert($variantId, $branchId, $previous, $remaining, $movementId);
 
             return StockDeductionResult::fromUnitCost($quantity, $unitCost);
         }
@@ -83,7 +89,8 @@ final readonly class StockMovementService
         $balances = $this->repository->lockLevels($variantId, [$fromBranchId, $toBranchId]);
 
         if ($this->lots === null) {
-            $remaining = $balances[$fromBranchId]->quantity->subtract($quantity);
+            $previous = $balances[$fromBranchId]->quantity;
+            $remaining = $previous->subtract($quantity);
 
             if ($remaining->isNegative()) {
                 throw new InsufficientStockException;
@@ -91,7 +98,8 @@ final readonly class StockMovementService
 
             $balances[$fromBranchId]->quantity = $remaining;
             $this->repository->saveBalance($balances[$fromBranchId]);
-            $this->repository->appendMovement($variantId, $fromBranchId, Quantity::from('-'.$quantity->toDecimal()), null, StockMovementType::TransferOut, 'stock_transfer', $sourceId);
+            $movementId = $this->repository->appendMovement($variantId, $fromBranchId, Quantity::from('-'.$quantity->toDecimal()), null, StockMovementType::TransferOut, 'stock_transfer', $sourceId);
+            $this->publishCrossingAlert($variantId, $fromBranchId, $previous, $remaining, $movementId);
             $balances[$toBranchId]->quantity = $balances[$toBranchId]->quantity->add($quantity);
             $this->repository->saveBalance($balances[$toBranchId]);
             $this->repository->appendMovement($variantId, $toBranchId, $quantity, null, StockMovementType::TransferIn, 'stock_transfer', $sourceId);
@@ -109,7 +117,8 @@ final readonly class StockMovementService
             ? $this->calculateAllocation($sourceLots, $quantity, StockMovementType::TransferOut)
             : StockDeductionResult::fromUnitCost($quantity, null);
 
-        $remaining = $balances[$fromBranchId]->quantity->subtract($quantity);
+        $previous = $balances[$fromBranchId]->quantity;
+        $remaining = $previous->subtract($quantity);
 
         if ($remaining->isNegative()) {
             throw new InsufficientStockException;
@@ -118,7 +127,8 @@ final readonly class StockMovementService
         $balances[$fromBranchId]->quantity = $remaining;
         $this->persistAllocations($sourceLots, $result);
         $this->repository->saveBalance($balances[$fromBranchId]);
-        $this->repository->appendMovement($variantId, $fromBranchId, Quantity::from('-'.$quantity->toDecimal()), $result->weightedUnitCost, StockMovementType::TransferOut, 'stock_transfer', $sourceId);
+        $movementId = $this->repository->appendMovement($variantId, $fromBranchId, Quantity::from('-'.$quantity->toDecimal()), $result->weightedUnitCost, StockMovementType::TransferOut, 'stock_transfer', $sourceId);
+        $this->publishCrossingAlert($variantId, $fromBranchId, $previous, $remaining, $movementId);
 
         $destination = $balances[$toBranchId];
         $destination->quantity = $destination->quantity->add($quantity);
@@ -150,11 +160,19 @@ final readonly class StockMovementService
             $keys,
             static fn ($key): bool => ($methods[$key->variantId] ?? 'avco') === 'fifo',
         )));
+        $profiles = $this->events === null
+            ? []
+            : $this->repository->reorderProfiles(array_map(
+                static fn (StockMovementData $movement): int => $movement->variantId,
+                $movements,
+            ));
         $results = [];
+        $previousQuantities = [];
 
         foreach ($movements as $movement) {
             $key = $movement->key()->value();
-            $remaining = $balances[$key]->quantity->subtract($quantities[$key]);
+            $previousQuantities[$key] = $balances[$key]->quantity;
+            $remaining = $previousQuantities[$key]->subtract($quantities[$key]);
 
             if ($remaining->isNegative()) {
                 throw new InsufficientStockException;
@@ -170,7 +188,7 @@ final readonly class StockMovementService
             $key = $movement->key()->value();
             $this->persistAllocations($lotGroups[$key] ?? [], $results[$key]);
             $this->repository->saveBalance($balances[$key]);
-            $this->repository->appendMovement(
+            $movementId = $this->repository->appendMovement(
                 $movement->variantId,
                 $movement->branchId,
                 Quantity::from('-'.$quantities[$key]->toDecimal()),
@@ -178,6 +196,14 @@ final readonly class StockMovementService
                 $movement->type,
                 $movement->sourceType,
                 $movement->sourceId,
+            );
+            $this->publishCrossingAlert(
+                $movement->variantId,
+                $movement->branchId,
+                $previousQuantities[$key],
+                $balances[$key]->quantity,
+                $movementId,
+                $profiles[$movement->variantId] ?? null,
             );
         }
 
@@ -302,5 +328,35 @@ final readonly class StockMovementService
     private function lotRepository(): InventoryLotRepository
     {
         return $this->lots ?? throw new LogicException('The configured stock service does not support inventory lots.');
+    }
+
+    private function publishCrossingAlert(
+        int $variantId,
+        int $branchId,
+        Quantity $previous,
+        Quantity $resulting,
+        int $stockMovementId,
+        ?VariantReorderProfile $profile = null,
+    ): void {
+        if ($this->events === null) {
+            return;
+        }
+
+        $profile ??= $this->repository->reorderProfiles([$variantId])[$variantId]
+            ?? throw new LogicException("Reorder profile missing for variant {$variantId}.");
+        $threshold = Quantity::from((string) $profile->reorderPoint);
+
+        if ($previous->compare($threshold) <= 0 || $resulting->compare($threshold) > 0) {
+            return;
+        }
+
+        $this->events->publishAfterCommit(new StockLow(
+            $profile->tenantId,
+            $variantId,
+            $branchId,
+            $resulting->toDecimal(),
+            $profile->reorderPoint,
+            $stockMovementId,
+        ));
     }
 }

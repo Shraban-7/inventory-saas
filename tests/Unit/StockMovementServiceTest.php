@@ -3,6 +3,7 @@
 use App\Domain\Entities\Quantity;
 use App\Domain\Entities\StockBalance;
 use App\Domain\Entities\StockMovementType;
+use App\Domain\Entities\VariantReorderProfile;
 use App\Domain\Exceptions\InsufficientStockException;
 use App\Domain\Repositories\StockRepository;
 use App\Domain\Services\StockMovementService;
@@ -15,9 +16,14 @@ class FakeStockRepository implements StockRepository
     /** @var list<int> */
     public array $lockedIds = [];
 
+    private int $nextMovementId = 1;
+
     /** @param array<int, StockBalance> $balances */
-    public function __construct(array $balances)
-    {
+    public function __construct(
+        array $balances,
+        private int $reorderPoint = 0,
+        private int $tenantId = 1,
+    ) {
         $this->balances = $balances;
     }
 
@@ -35,7 +41,21 @@ class FakeStockRepository implements StockRepository
         $this->balances[$balance->branchId] = $balance;
     }
 
-    public function appendMovement(int $variantId, int $branchId, Quantity $delta, ?string $unitCost, StockMovementType $type, ?string $sourceType, ?int $sourceId): void {}
+    public function appendMovement(int $variantId, int $branchId, Quantity $delta, ?string $unitCost, StockMovementType $type, ?string $sourceType, ?int $sourceId): int
+    {
+        return $this->nextMovementId++;
+    }
+
+    public function reorderProfiles(array $variantIds): array
+    {
+        $profiles = [];
+
+        foreach (array_unique($variantIds) as $variantId) {
+            $profiles[$variantId] = new VariantReorderProfile($variantId, $this->tenantId, $this->reorderPoint);
+        }
+
+        return $profiles;
+    }
 }
 
 it('rejects deductions greater than on hand', function () {

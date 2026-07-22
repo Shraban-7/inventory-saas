@@ -6,6 +6,7 @@ use App\Domain\Entities\Quantity;
 use App\Domain\Entities\StockBalance;
 use App\Domain\Entities\StockLevelKey;
 use App\Domain\Entities\StockMovementType;
+use App\Domain\Entities\VariantReorderProfile;
 use App\Domain\Repositories\BulkStockRepository;
 use App\Infrastructure\Models\Branch;
 use App\Infrastructure\Models\ProductVariant;
@@ -108,9 +109,9 @@ class EloquentStockRepository implements BulkStockRepository
         ]);
     }
 
-    public function appendMovement(int $variantId, int $branchId, Quantity $delta, ?string $unitCost, StockMovementType $type, ?string $sourceType, ?int $sourceId): void
+    public function appendMovement(int $variantId, int $branchId, Quantity $delta, ?string $unitCost, StockMovementType $type, ?string $sourceType, ?int $sourceId): int
     {
-        StockMovement::query()->create([
+        $movement = StockMovement::query()->create([
             'product_variant_id' => $variantId,
             'branch_id' => $branchId,
             'type' => $type,
@@ -119,5 +120,28 @@ class EloquentStockRepository implements BulkStockRepository
             'source_type' => $sourceType,
             'source_id' => $sourceId,
         ]);
+
+        return (int) $movement->getKey();
+    }
+
+    /** @return array<int, VariantReorderProfile> */
+    public function reorderProfiles(array $variantIds): array
+    {
+        $variantIds = array_values(array_unique($variantIds));
+
+        if ($variantIds === []) {
+            return [];
+        }
+
+        return ProductVariant::query()
+            ->whereKey($variantIds)
+            ->get(['id', 'tenant_id', 'reorder_point'])
+            ->mapWithKeys(static fn (ProductVariant $variant): array => [
+                (int) $variant->getKey() => new VariantReorderProfile(
+                    (int) $variant->getKey(),
+                    (int) $variant->tenant_id,
+                    (int) $variant->reorder_point,
+                ),
+            ])->all();
     }
 }
